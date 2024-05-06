@@ -209,6 +209,7 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items = append(items, newItem)
+	logActivity("Added", newItem.Name)
 
 	data, err := json.Marshal(items)
 	if err != nil {
@@ -327,4 +328,9 @@ func getRedisClient() *redis.Client {
 		Password: "",           // Пароль, если он установлен
 		DB:       0,            // Используемая база данных
 	})
+}
+
+func logActivity(activity string, itemName string) {
+	// Логгирование действий в консоль
+	log.Printf("%s: %s", activity, itemName)
 }
