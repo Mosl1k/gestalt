@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  web:
+    build: .
+    container_name: shoppinglist
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    volumes:
+      - web_data:/app/data  # Путь к каталогу на хосте, где будут сохраняться данные
+
+volumes:
+  redis_data:
+  web_data:  # Определение тома хоста для сервиса web
