@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/go-redis/redis/v8"
@@ -34,127 +36,20 @@ func main() {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	html := `
-	<!DOCTYPE html>
-	<html lang="en">
-	<head>
-	    <meta charset="UTF-8">
-	    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-	    <title>Shopping List</title>
-	</head>
-	<body>
-	    <h1>Shopping List</h1>
-	    <div>
-	        <input type="text" id="itemName" placeholder="Item name">
-	        <button onclick="addItem()">Add</button>
-	    </div>
-	    <ul id="shoppingList"></ul>
+	htmlFile, err := os.Open("index.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("Error opening HTML file:", err)
+		return
+	}
+	defer htmlFile.Close()
 
-	    <script>
-	        function addItem() {
-	            const itemNameInput = document.getElementById('itemName');
-	            const itemName = itemNameInput.value.trim();
-	            if (!itemName) return;
-
-	            fetch('/add', {
-	                method: 'POST',
-	                headers: {
-	                    'Content-Type': 'application/json',
-	                },
-	                body: JSON.stringify({
-	                    name: itemName,
-	                    quantity: 1,
-	                }),
-	            })
-	            .then(response => {
-	                if (!response.ok) {
-	                    throw new Error('Network response was not ok');
-	                }
-	                itemNameInput.value = '';
-	                fetchShoppingList();
-	            })
-	            .catch(error => {
-	                console.error('There was an error!', error);
-	            });
-	        }
-
-	        function toggleBought(name, checked) {
-	            fetch('/buy/' + encodeURIComponent(name), {
-	                method: 'PUT',
-	                headers: {
-	                    'Content-Type': 'application/json',
-	                },
-	                body: JSON.stringify({
-	                    bought: checked,
-	                }),
-	            })
-	            .then(response => {
-	                if (!response.ok) {
-	                    throw new Error('Network response was not ok');
-	                }
-	                fetchShoppingList();
-	            })
-	            .catch(error => {
-	                console.error('There was an error!', error);
-	            });
-	        }
-
-	        function deleteItem(name, listItem) {
-	            fetch('/delete/' + encodeURIComponent(name), {
-	                method: 'DELETE',
-	            })
-	            .then(response => {
-	                if (!response.ok) {
-	                    throw new Error('Network response was not ok');
-	                }
-	                listItem.remove();
-	            })
-	            .catch(error => {
-	                console.error('There was an error!', error);
-	            });
-	        }
-
-	        function fetchShoppingList() {
-	            fetch('/list')
-	            .then(response => {
-	                if (!response.ok) {
-	                    throw new Error('Network response was not ok');
-	                }
-	                return response.json();
-	            })
-	            .then(data => {
-	                const shoppingList = document.getElementById('shoppingList');
-	                shoppingList.innerHTML = '';
-	                data.forEach(item => {
-	                    const li = document.createElement('li');
-	                    const checkbox = document.createElement('input');
-	                    checkbox.type = 'checkbox';
-	                    checkbox.checked = item.bought;
-	                    checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
-	                    li.appendChild(checkbox);
-	                    li.appendChild(document.createTextNode(item.name));
-	                    if (item.bought) {
-	                        const deleteButton = document.createElement('button');
-	                        deleteButton.textContent = 'Delete';
-	                        deleteButton.onclick = () => deleteItem(item.name, li);
-	                        li.appendChild(deleteButton);
-	                    }
-	                    shoppingList.appendChild(li);
-	                });
-	            })
-	            .catch(error => {
-	                console.error('There was an error!', error);
-	            });
-	        }
-
-	        // Load shopping list on page load
-	        fetchShoppingList();
-	    </script>
-	</body>
-	</html>
-	`
+	// Отправляем содержимое файла как ответ
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(html))
+	_, err = io.Copy(w, htmlFile)
+	if err != nil {
+		log.Println("Error sending HTML content:", err)
+	}
 }
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
@@ -300,12 +195,16 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for i, item := range items {
-		if item.Name == itemName {
-			items = append(items[:i], items[i+1:]...)
-			break
+	// Создаем новый срез для хранения элементов, кроме удаляемого
+	var newItems []Item
+	// Перебираем элементы и копируем их в новый срез, исключая удаляемый
+	for _, item := range items {
+		if item.Name != itemName {
+			newItems = append(newItems, item)
 		}
 	}
+	// Выполняем логирование удаления элемента
+	logActivity("Deleted", itemName)
 
 	data, err := json.Marshal(items)
 	if err != nil {
