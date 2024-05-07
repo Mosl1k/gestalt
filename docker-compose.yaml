@@ -5,11 +5,13 @@ services:
     image: redis
     container_name: redis
     ports:
-      - "6379:6379"
+      - "6379:6580"
     volumes:
       - redis_data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf  # Подключаем файл конфигурации
-
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+  
   web:
     build: .
     container_name: shoppinglist
@@ -17,6 +19,9 @@ services:
       - "8080:8080"
     depends_on:
       - redis
+    environment:
+      - REDIS_ADDR=redis:6580
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
 
 volumes:
   redis_data:

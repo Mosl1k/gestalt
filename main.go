@@ -223,9 +223,9 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 
 func getRedisClient() *redis.Client {
 	return redis.NewClient(&redis.Options{
-		Addr:     "redis:6379", // Название контейнера Redis в сети Docker Compose
-		Password: "",           // Пароль, если он установлен
-		DB:       0,            // Используемая база данных
+		Addr:     os.Getenv("REDIS_ADDR"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0, // Используемая база данных
 	})
 }
 
