@@ -32,6 +32,7 @@ func main() {
 	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
 
 	fmt.Println("Server is running on port 8080...")
+	log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
