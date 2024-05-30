@@ -17,6 +17,7 @@ type Item struct {
 	Name     string `json:"name"`
 	Quantity int    `json:"quantity"`
 	Bought   bool   `json:"bought"`
+	Category string `json:"category"` // Поле для категории
 }
 
 var (
@@ -71,6 +72,17 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	category := r.URL.Query().Get("category")
+	if category != "" {
+		var filteredItems []Item
+		for _, item := range items {
+			if item.Category == category {
+				filteredItems = append(filteredItems, item)
+			}
+		}
+		items = filteredItems
+	}
+
 	json.NewEncoder(w).Encode(items)
 }
 
@@ -80,6 +92,11 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// Устанавливаем категорию "купить" по умолчанию
+	if newItem.Category == "" {
+		newItem.Category = "купить"
 	}
 
 	ctx := r.Context()
