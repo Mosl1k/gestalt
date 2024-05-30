@@ -31,9 +31,9 @@ func main() {
 	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
 	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
 
-	fmt.Println("Server is running on port 8080...")
-	log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
-	log.Fatal(http.ListenAndServe(":8080", r))
+	fmt.Println("Server is running on port 80...")
+	// log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
+	log.Fatal(http.ListenAndServe(":80", r))
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -207,7 +207,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	// Выполняем логирование удаления элемента
 	logActivity("Deleted", itemName)
 
-	data, err := json.Marshal(items)
+	data, err := json.Marshal(newItems) // Маршализуем обновленный список
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
