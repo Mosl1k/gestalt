@@ -14,8 +14,8 @@ import (
 )
 
 type Item struct {
-	Name     string `json:"name"`
-	Quantity int    `json:"quantity"`
+	Name string `json:"name"`
+	//	Quantity int    `json:"quantity"`
 	Bought   bool   `json:"bought"`
 	Category string `json:"category"` // Поле для категории
 }
