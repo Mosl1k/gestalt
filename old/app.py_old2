@@ -1,9 +1,14 @@
 from flask import Flask, request, jsonify
-import requests
+import requests  # Импортируем requests для отправки HTTP запросов
+from dotenv import load_dotenv
 import os
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 
+# Функция для отправки данных в API
 def add_to_shopping_list(item_name, category):
     url = 'https://geshtalt.ddns.net:443/add'
     payload = {
@@ -19,28 +24,21 @@ def add_to_shopping_list(item_name, category):
 @app.route('/', methods=['POST'])
 def webhook():
     data = request.json
-    print("Request received: ", data)
+    print("Request received: ", data)  # Выводим полученные данные в консоль
     
-    command = data['request']['command'].strip().lower()
+    command = data['request']['command']
     
-    if command == '':
-        response_text = "Привет, что нужно сделать?"
-    elif command.startswith('запиши'):
-        item_to_record = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'не забыть': '{item_to_record}'")
+    if command.lower().startswith('купить'):
+        item_to_buy = ' '.join(data['request']['nlu']['tokens'][1:])  # Соединяем все слова после "купить"
         
-        api_response = add_to_shopping_list(item_to_record, 'не забыть')
-        print("API response:", api_response)
+        # Временный вывод в консоль
+        print(f"Записано в список: '{item_to_buy}'")
         
-        response_text = f"Записано в список 'не забыть': '{item_to_record}'"
-    elif command.startswith('купить'):
-        item_to_buy = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'купить': '{item_to_buy}'")
-        
+        # Добавляем в список через API
         api_response = add_to_shopping_list(item_to_buy, 'купить')
-        print("API response:", api_response)
+        print("API response:", api_response)  # Выводим ответ API в консоль
         
-        response_text = f"Записано в список 'купить': '{item_to_buy}'"
+        response_text = f"Записано в список: '{item_to_buy}'"
     else:
         response_text = "Извините, я не понимаю эту команду."
     
@@ -61,5 +59,5 @@ def webhook():
     return jsonify(response)
 
 if __name__ == '__main__':
-    context = ('cert.pem', 'key.pem')
+    context = ('cert.pem', 'key.pem')  # Путь к вашим SSL-сертификату и ключу
     app.run(host='0.0.0.0', port=2112, ssl_context=context)

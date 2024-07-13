@@ -1,28 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="yandex-verification" content="4be35e07669130b6" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping List</title>
-    <style>
-        .купить { color: green; }
-        .не-забыть { color: red; }
-        .filter-buttons { margin-bottom: 20px; }
-        .filter-buttons button { margin-right: 10px; }
-    </style>
 </head>
 <body>
-    <div class="filter-buttons">
-        <button onclick="filterCategory('купить')">Купить</button>
-        <button onclick="filterCategory('не-забыть')">Не забыть</button>
-    </div>
+    <h1>Shopping List</h1>
     <div>
         <input type="text" id="itemName" placeholder="Item name">
-        <select id="itemCategory">
-            <option value="купить">Купить</option>
-            <option value="не-забыть">Не забыть</option>
-        </select>
         <button onclick="addItem()">Add</button>
     </div>
     <ul id="shoppingList"></ul>
@@ -30,10 +16,8 @@
     <script>
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
-            const itemCategoryInput = document.getElementById('itemCategory');
             const itemName = itemNameInput.value.trim();
-            const itemCategory = itemCategoryInput.value.trim();
-            if (!itemName || !itemCategory) return;
+            if (!itemName) return;
 
             fetch('/add', {
                 method: 'POST',
@@ -42,7 +26,7 @@
                 },
                 body: JSON.stringify({
                     name: itemName,
-                    category: itemCategory
+                    quantity: 1,
                 }),
             })
             .then(response => {
@@ -50,7 +34,6 @@
                     throw new Error('Network response was not ok');
                 }
                 itemNameInput.value = '';
-                itemCategoryInput.value = 'купить'; // Сброс категории к "купить" по умолчанию
                 fetchShoppingList();
             })
             .catch(error => {
@@ -107,41 +90,6 @@
                 shoppingList.innerHTML = '';
                 data.forEach(item => {
                     const li = document.createElement('li');
-                    li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.checked = item.bought;
-                    checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
-                    li.appendChild(checkbox);
-                    li.appendChild(document.createTextNode(item.name));
-                    if (item.bought) {
-                        const deleteButton = document.createElement('button');
-                        deleteButton.textContent = 'Delete';
-                        deleteButton.onclick = () => deleteItem(item.name, li);
-                        li.appendChild(deleteButton);
-                    }
-                    shoppingList.appendChild(li);
-                });
-            })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
-        }
-
-        function filterCategory(category) {
-            fetch(`/list?category=${encodeURIComponent(category)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                const shoppingList = document.getElementById('shoppingList');
-                shoppingList.innerHTML = '';
-                data.forEach(item => {
-                    const li = document.createElement('li');
-                    li.className = item.category.replace(/\s+/g, '-');
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.checked = item.bought;

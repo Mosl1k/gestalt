@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify
 import requests
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -21,26 +24,18 @@ def webhook():
     data = request.json
     print("Request received: ", data)
     
-    command = data['request']['command'].strip().lower()
+    command = data['request']['command'].strip().lower()  # Приводим команду к нижнему регистру и убираем лишние пробелы
     
     if command == '':
-        response_text = "Привет, что нужно сделать?"
-    elif command.startswith('запиши'):
-        item_to_record = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'не забыть': '{item_to_record}'")
-        
-        api_response = add_to_shopping_list(item_to_record, 'не забыть')
-        print("API response:", api_response)
-        
-        response_text = f"Записано в список 'не забыть': '{item_to_record}'"
+        response_text = "Привет, что нужно записать?"
     elif command.startswith('купить'):
         item_to_buy = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'купить': '{item_to_buy}'")
+        print(f"Записано в список: '{item_to_buy}'")
         
         api_response = add_to_shopping_list(item_to_buy, 'купить')
         print("API response:", api_response)
         
-        response_text = f"Записано в список 'купить': '{item_to_buy}'"
+        response_text = f"Записано в список: '{item_to_buy}'"
     else:
         response_text = "Извините, я не понимаю эту команду."
     

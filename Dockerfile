@@ -1,3 +1,5 @@
+# Dockerfile
+
 # Используем образ Golang в качестве базового
 FROM golang:latest
 
