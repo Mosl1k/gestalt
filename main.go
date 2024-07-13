@@ -32,9 +32,9 @@ func main() {
 	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
 	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
 
-	fmt.Println("Server is running on port 80...")
-	// log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
-	log.Fatal(http.ListenAndServe(":80", r))
+	fmt.Println("Server is running on port 8080...")
+	log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -135,8 +135,11 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	// Отправляем JSON-ответ с подтверждением
+	response := map[string]string{"message": "Item added successfully"}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
 }
 
 func buyHandler(w http.ResponseWriter, r *http.Request) {
