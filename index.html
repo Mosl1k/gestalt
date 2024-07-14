@@ -49,8 +49,13 @@
         <button onclick="closeEditModal()">Cancel</button>
     </div>
 
+    <div>
+        <button onclick="deleteCheckedItems()">Удалить выбранное</button>
+    </div>
+
     <script>
         let currentEditItem = null;
+        let currentFilter = null; // Переменная для хранения текущего фильтра
 
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
@@ -75,7 +80,11 @@
                 }
                 itemNameInput.value = '';
                 itemCategoryInput.value = 'купить'; // Сброс категории к "купить" по умолчанию
-                fetchShoppingList();
+                if (currentFilter) {
+                    filterCategory(currentFilter); // Показываем текущий фильтр после добавления элемента
+                } else {
+                    fetchShoppingList(); // Иначе загружаем весь список
+                }
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -96,7 +105,11 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                fetchShoppingList();
+                if (currentFilter) {
+                    filterCategory(currentFilter); // Показываем текущий фильтр после изменения состояния покупки
+                } else {
+                    fetchShoppingList(); // Иначе загружаем весь список
+                }
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -111,7 +124,11 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                listItem.remove();
+                if (currentFilter) {
+                    filterCategory(currentFilter); // Показываем текущий фильтр после удаления элемента
+                } else {
+                    fetchShoppingList(); // Иначе загружаем весь список
+                }
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -140,23 +157,73 @@
             data.forEach(item => {
                 const li = document.createElement('li');
                 li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
+
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.checked = item.bought;
-                checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
+                checkbox.dataset.name = item.name;
+                checkbox.checked = false; // По умолчанию не отмечен
+                checkbox.addEventListener('change', toggleEditButton); // Изменено на toggleEditButton
                 li.appendChild(checkbox);
+
                 li.appendChild(document.createTextNode(item.name));
                 if (item.bought) {
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = 'Delete';
                     deleteButton.onclick = () => deleteItem(item.name, li);
                     li.appendChild(deleteButton);
+
+                    const editButton = document.createElement('button');
+                    editButton.textContent = 'Edit';
+                    editButton.onclick = () => editItem(item.name, item.category);
+                    li.appendChild(editButton);
                 }
-                const editButton = document.createElement('button');
-                editButton.textContent = 'Edit';
-                editButton.onclick = () => editItem(item.name, item.category);
-                li.appendChild(editButton);
+
                 shoppingList.appendChild(li);
+            });
+
+            toggleEditButton(); // Вызываем после отрисовки списка, чтобы установить корректное состояние кнопки Edit
+        }
+
+        function toggleEditButton() {
+            const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
+            const editButton = document.getElementById('editButton');
+
+            if (editButton) {
+                editButton.remove(); // Удаляем кнопку Edit, если она уже есть
+            }
+
+            checkboxes.forEach(checkbox => {
+                const listItem = checkbox.parentNode; // Родительский элемент li
+                if (listItem.querySelector('button') === null) {
+                    const editButton = document.createElement('button');
+                    editButton.textContent = 'Edit';
+                    editButton.onclick = () => editItem(checkbox.dataset.name, checkbox.parentNode.className);
+                    listItem.appendChild(editButton);
+                }
+            });
+        }
+
+        function deleteCheckedItems() {
+            const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
+            checkboxes.forEach(checkbox => {
+                const name = checkbox.dataset.name;
+                fetch('/delete/' + encodeURIComponent(name), {
+                    method: 'DELETE',
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    // Не загружаем весь список, а обновляем текущий фильтр или весь список в зависимости от текущего состояния
+                    if (currentFilter) {
+                        filterCategory(currentFilter);
+                    } else {
+                        fetchShoppingList();
+                    }
+                })
+                .catch(error => {
+                    console.error('There was an error!', error);
+                });
             });
         }
 
@@ -169,6 +236,7 @@
                 return response.json();
             })
             .then(data => {
+                currentFilter = category; // Сохраняем текущий фильтр
                 renderList(data);
             })
             .catch(error => {
@@ -204,7 +272,11 @@
                 }
                 currentEditItem = null;
                 document.getElementById('editModal').style.display = 'none';
-                fetchShoppingList();
+                if (currentFilter) {
+                    filterCategory(currentFilter); // Показываем текущий фильтр после редактирования
+                } else {
+                    fetchShoppingList(); // Иначе загружаем весь список
+                }
             })
             .catch(error => {
                 console.error('There was an error!', error);
