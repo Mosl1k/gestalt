@@ -30,7 +30,7 @@ func main() {
 	r.HandleFunc("/add", addHandler).Methods("POST")
 	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
 	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
-
+	r.HandleFunc("/edit/{name}", editHandler).Methods("PUT")
 	fmt.Println("Server is running on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
@@ -139,6 +139,62 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
+}
+
+func editHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	oldName := vars["name"]
+
+	var editedItem Item
+	err := json.NewDecoder(r.Body).Decode(&editedItem)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	val, err := client.Get(ctx, "shoppingList").Result()
+	if err != nil && err != redis.Nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var items []Item
+	if err == nil {
+		err = json.Unmarshal([]byte(val), &items)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	for i := range items {
+		if items[i].Name == oldName {
+			items[i].Name = editedItem.Name
+			items[i].Category = editedItem.Category
+			break
+		}
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func buyHandler(w http.ResponseWriter, r *http.Request) {

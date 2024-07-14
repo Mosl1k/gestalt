@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="yandex-verification" content="4be35e07669130b6" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping List</title>
@@ -9,14 +10,23 @@
         .не-забыть { color: red; }
         .filter-buttons { margin-bottom: 20px; }
         .filter-buttons button { margin-right: 10px; }
-        .filter-buttons .active { font-weight: bold; }
+        #editModal {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid #ccc;
+            padding: 20px;
+            background: white;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="filter-buttons">
-        <button id="filter-buy" onclick="filterCategory('купить')">Купить</button>
-        <button id="filter-dont-forget" onclick="filterCategory('не-забыть')">Не забыть</button>
-        <button id="filter-all" onclick="fetchShoppingList()">Весь список</button>
+        <button onclick="filterCategory('купить')">Купить</button>
+        <button onclick="filterCategory('не-забыть')">Не забыть</button>
+        <button onclick="fetchShoppingList()">Весь список</button>
     </div>
     <div>
         <input type="text" id="itemName" placeholder="Item name">
@@ -28,8 +38,19 @@
     </div>
     <ul id="shoppingList"></ul>
 
+    <!-- Модальное окно для редактирования -->
+    <div id="editModal">
+        <input type="text" id="editItemName" placeholder="New item name">
+        <select id="editItemCategory">
+            <option value="купить">Купить</option>
+            <option value="не-забыть">Не забыть</option>
+        </select>
+        <button onclick="saveEditItem()">Save</button>
+        <button onclick="closeEditModal()">Cancel</button>
+    </div>
+
     <script>
-        let currentFilter = ''; // Переменная для хранения текущего фильтра
+        let currentEditItem = null;
 
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
@@ -54,7 +75,7 @@
                 }
                 itemNameInput.value = '';
                 itemCategoryInput.value = 'купить'; // Сброс категории к "купить" по умолчанию
-                updateShoppingList();
+                fetchShoppingList();
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -75,7 +96,7 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                updateShoppingList();
+                fetchShoppingList();
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -98,8 +119,6 @@
         }
 
         function fetchShoppingList() {
-            currentFilter = ''; // Устанавливаем текущий фильтр в пустую строку, если показываем весь список
-            highlightFilterButton();
             fetch('/list')
             .then(response => {
                 if (!response.ok) {
@@ -115,9 +134,33 @@
             });
         }
 
+        function renderList(data) {
+            const shoppingList = document.getElementById('shoppingList');
+            shoppingList.innerHTML = '';
+            data.forEach(item => {
+                const li = document.createElement('li');
+                li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = item.bought;
+                checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
+                li.appendChild(checkbox);
+                li.appendChild(document.createTextNode(item.name));
+                if (item.bought) {
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.onclick = () => deleteItem(item.name, li);
+                    li.appendChild(deleteButton);
+                }
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.onclick = () => editItem(item.name, item.category);
+                li.appendChild(editButton);
+                shoppingList.appendChild(li);
+            });
+        }
+
         function filterCategory(category) {
-            currentFilter = category; // Сохраняем текущий фильтр
-            highlightFilterButton();
             fetch(`/list?category=${encodeURIComponent(category)}`)
             .then(response => {
                 if (!response.ok) {
@@ -133,47 +176,43 @@
             });
         }
 
-        function updateShoppingList() {
-            if (currentFilter) {
-                filterCategory(currentFilter); // Применяем текущий фильтр
-            } else {
-                fetchShoppingList(); // Показываем весь список
-            }
+        function editItem(name, category) {
+            currentEditItem = name;
+            document.getElementById('editItemName').value = name;
+            document.getElementById('editItemCategory').value = category;
+            document.getElementById('editModal').style.display = 'block';
         }
 
-        function renderList(items) {
-            const shoppingList = document.getElementById('shoppingList');
-            shoppingList.innerHTML = '';
-            items.forEach(item => {
-                const li = document.createElement('li');
-                li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = item.bought;
-                checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
-                li.appendChild(checkbox);
-                li.appendChild(document.createTextNode(item.name));
-                if (item.bought) {
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Delete';
-                    deleteButton.onclick = () => deleteItem(item.name, li);
-                    li.appendChild(deleteButton);
+        function saveEditItem() {
+            const newName = document.getElementById('editItemName').value.trim();
+            const newCategory = document.getElementById('editItemCategory').value.trim();
+            if (!newName || !newCategory) return;
+
+            fetch('/edit/' + encodeURIComponent(currentEditItem), {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: newName,
+                    category: newCategory
+                }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
                 }
-                shoppingList.appendChild(li);
+                currentEditItem = null;
+                document.getElementById('editModal').style.display = 'none';
+                fetchShoppingList();
+            })
+            .catch(error => {
+                console.error('There was an error!', error);
             });
         }
 
-        function highlightFilterButton() {
-            const buttons = document.querySelectorAll('.filter-buttons button');
-            buttons.forEach(button => button.classList.remove('active'));
-
-            if (currentFilter === 'купить') {
-                document.getElementById('filter-buy').classList.add('active');
-            } else if (currentFilter === 'не-забыть') {
-                document.getElementById('filter-dont-forget').classList.add('active');
-            } else {
-                document.getElementById('filter-all').classList.add('active');
-            }
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
         }
 
         // Load shopping list on page load
