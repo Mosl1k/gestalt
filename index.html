@@ -58,7 +58,7 @@
         let currentFilter = null; // Переменная для хранения текущего фильтра
 
         document.addEventListener('DOMContentLoaded', function() {
-            fetchShoppingList(); // Загрузка списка при загрузке страницы
+            loadCurrentState(); // Загрузка состояния при загрузке страницы
         });
 
         function addItem() {
@@ -140,7 +140,8 @@
         }
 
         function fetchShoppingList() {
-            currentFilter = null; // Сбрасываем текущий фильтр для "весь список"
+            currentFilter = null;
+            updateActiveButton(null);
             fetch('/list')
             .then(response => {
                 if (!response.ok) {
@@ -149,8 +150,7 @@
                 return response.json();
             })
             .then(data => {
-                renderList(data); // Рендерим весь список
-                updateActiveButton(null); // Сбрасываем активную кнопку фильтрации
+                renderList(data); // После успешного получения данных с сервера, рендерим список
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -193,26 +193,29 @@
         }
 
         function deleteCheckedItems() {
-            const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
-            checkboxes.forEach(checkbox => {
-                const name = checkbox.dataset.name;
-                fetch('/delete/' + encodeURIComponent(name), {
-                    method: 'DELETE',
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    if (currentFilter) {
-                        filterCategory(currentFilter); // Обновляем текущий фильтр после удаления элементов
-                    } else {
-                        fetchShoppingList(); // Иначе загружаем весь список
-                    }
-                })
-                .catch(error => {
-                    console.error('There was an error!', error);
+            if (confirm('Вы уверены, что хотите удалить выбранные элементы?')) {
+                const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
+                checkboxes.forEach(checkbox => {
+                    const name = checkbox.dataset.name;
+                    fetch('/delete/' + encodeURIComponent(name), {
+                        method: 'DELETE',
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        // Не загружаем весь список, а обновляем текущий фильтр или весь список в зависимости от текущего состояния
+                        if (currentFilter) {
+                            filterCategory(currentFilter);
+                        } else {
+                            fetchShoppingList();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('There was an error!', error);
+                    });
                 });
-            });
+            }
         }
 
         function filterCategory(category) {
@@ -228,33 +231,41 @@
                 renderList(data); // Рендерим список для выбранной категории
                 updateActiveButton(category); // Обновляем активную кнопку
                 updateAddItemCategory(category); // Обновляем категорию для добавления
+                saveCurrentState(); // Сохраняем текущее состояние
             })
             .catch(error => {
                 console.error('There was an error!', error);
             });
         }
 
-        function updateActiveButton(category) {
-            const buyButton = document.getElementById('buyButton');
-            const forgetButton = document.getElementById('forgetButton');
-            const allButton = document.getElementById('allButton');
+        function updateAddItemCategory(category) {
+            document.getElementById('itemCategory').value = category;
+        }
 
-            buyButton.classList.remove('active');
-            forgetButton.classList.remove('active');
-            allButton.classList.remove('active');
+        function updateActiveButton(category) {
+            const buttons = document.querySelectorAll('.filter-buttons button');
+            buttons.forEach(button => button.classList.remove('active'));
 
             if (category === 'купить') {
-                buyButton.classList.add('active');
+                document.getElementById('buyButton').classList.add('active');
             } else if (category === 'не-забыть') {
-                forgetButton.classList.add('active');
+                document.getElementById('forgetButton').classList.add('active');
             } else {
-                allButton.classList.add('active');
+                document.getElementById('allButton').classList.add('active');
             }
         }
 
-        function updateAddItemCategory(category) {
-            const itemCategoryInput = document.getElementById('itemCategory');
-            itemCategoryInput.value = category || 'купить'; // Обновляем категорию для добавления на основе текущего фильтра
+        function saveCurrentState() {
+            localStorage.setItem('currentFilter', currentFilter);
+        }
+
+        function loadCurrentState() {
+            const savedFilter = localStorage.getItem('currentFilter');
+            if (savedFilter) {
+                filterCategory(savedFilter);
+            } else {
+                fetchShoppingList();
+            }
         }
 
         function editItem(name, category) {
