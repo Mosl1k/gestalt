@@ -9,13 +9,14 @@
         .не-забыть { color: red; }
         .filter-buttons { margin-bottom: 20px; }
         .filter-buttons button { margin-right: 10px; }
+        .filter-buttons .active { font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="filter-buttons">
-        <button onclick="filterCategory('купить')">Купить</button>
-        <button onclick="filterCategory('не-забыть')">Не забыть</button>
-        <button onclick="fetchShoppingList()">Весь список</button> <!-- Добавили кнопку "Весь список" -->
+        <button id="filter-buy" onclick="filterCategory('купить')">Купить</button>
+        <button id="filter-dont-forget" onclick="filterCategory('не-забыть')">Не забыть</button>
+        <button id="filter-all" onclick="fetchShoppingList()">Весь список</button>
     </div>
     <div>
         <input type="text" id="itemName" placeholder="Item name">
@@ -28,6 +29,8 @@
     <ul id="shoppingList"></ul>
 
     <script>
+        let currentFilter = ''; // Переменная для хранения текущего фильтра
+
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
             const itemCategoryInput = document.getElementById('itemCategory');
@@ -51,7 +54,7 @@
                 }
                 itemNameInput.value = '';
                 itemCategoryInput.value = 'купить'; // Сброс категории к "купить" по умолчанию
-                fetchShoppingList();
+                updateShoppingList();
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -72,7 +75,7 @@
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
-                fetchShoppingList();
+                updateShoppingList();
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -95,6 +98,8 @@
         }
 
         function fetchShoppingList() {
+            currentFilter = ''; // Устанавливаем текущий фильтр в пустую строку, если показываем весь список
+            highlightFilterButton();
             fetch('/list')
             .then(response => {
                 if (!response.ok) {
@@ -103,25 +108,7 @@
                 return response.json();
             })
             .then(data => {
-                const shoppingList = document.getElementById('shoppingList');
-                shoppingList.innerHTML = '';
-                data.forEach(item => {
-                    const li = document.createElement('li');
-                    li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.checked = item.bought;
-                    checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
-                    li.appendChild(checkbox);
-                    li.appendChild(document.createTextNode(item.name));
-                    if (item.bought) {
-                        const deleteButton = document.createElement('button');
-                        deleteButton.textContent = 'Delete';
-                        deleteButton.onclick = () => deleteItem(item.name, li);
-                        li.appendChild(deleteButton);
-                    }
-                    shoppingList.appendChild(li);
-                });
+                renderList(data);
             })
             .catch(error => {
                 console.error('There was an error!', error);
@@ -129,6 +116,8 @@
         }
 
         function filterCategory(category) {
+            currentFilter = category; // Сохраняем текущий фильтр
+            highlightFilterButton();
             fetch(`/list?category=${encodeURIComponent(category)}`)
             .then(response => {
                 if (!response.ok) {
@@ -137,29 +126,54 @@
                 return response.json();
             })
             .then(data => {
-                const shoppingList = document.getElementById('shoppingList');
-                shoppingList.innerHTML = '';
-                data.forEach(item => {
-                    const li = document.createElement('li');
-                    li.className = item.category.replace(/\s+/g, '-');
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.checked = item.bought;
-                    checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
-                    li.appendChild(checkbox);
-                    li.appendChild(document.createTextNode(item.name));
-                    if (item.bought) {
-                        const deleteButton = document.createElement('button');
-                        deleteButton.textContent = 'Delete';
-                        deleteButton.onclick = () => deleteItem(item.name, li);
-                        li.appendChild(deleteButton);
-                    }
-                    shoppingList.appendChild(li);
-                });
+                renderList(data);
             })
             .catch(error => {
                 console.error('There was an error!', error);
             });
+        }
+
+        function updateShoppingList() {
+            if (currentFilter) {
+                filterCategory(currentFilter); // Применяем текущий фильтр
+            } else {
+                fetchShoppingList(); // Показываем весь список
+            }
+        }
+
+        function renderList(items) {
+            const shoppingList = document.getElementById('shoppingList');
+            shoppingList.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = item.bought;
+                checkbox.onclick = () => toggleBought(item.name, checkbox.checked);
+                li.appendChild(checkbox);
+                li.appendChild(document.createTextNode(item.name));
+                if (item.bought) {
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.onclick = () => deleteItem(item.name, li);
+                    li.appendChild(deleteButton);
+                }
+                shoppingList.appendChild(li);
+            });
+        }
+
+        function highlightFilterButton() {
+            const buttons = document.querySelectorAll('.filter-buttons button');
+            buttons.forEach(button => button.classList.remove('active'));
+
+            if (currentFilter === 'купить') {
+                document.getElementById('filter-buy').classList.add('active');
+            } else if (currentFilter === 'не-забыть') {
+                document.getElementById('filter-dont-forget').classList.add('active');
+            } else {
+                document.getElementById('filter-all').classList.add('active');
+            }
         }
 
         // Load shopping list on page load
