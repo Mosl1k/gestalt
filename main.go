@@ -201,6 +201,15 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemName := vars["name"]
 
+	var item struct {
+		Bought bool `json:"bought"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&item)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 	client := getRedisClient()
 	defer client.Close()
@@ -223,9 +232,10 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Находим элемент в списке и обновляем его состояние
 	for i := range items {
 		if items[i].Name == itemName {
-			items[i].Bought = !items[i].Bought
+			items[i].Bought = item.Bought
 			break
 		}
 	}
