@@ -56,6 +56,7 @@
     <script>
         let currentEditItem = null;
         let currentFilter = null; // Переменная для хранения текущего фильтра
+        let checkboxStates = {}; // Объект для хранения состояний чекбоксов
 
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
@@ -161,8 +162,11 @@
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.dataset.name = item.name;
-                checkbox.checked = false; // По умолчанию не отмечен
-                checkbox.addEventListener('change', toggleEditButton); // Изменено на toggleEditButton
+                checkbox.checked = checkboxStates[item.name] || false; // Используем сохраненное состояние чекбокса
+                checkbox.addEventListener('change', function() {
+                    checkboxStates[item.name] = this.checked; // Сохраняем текущее состояние чекбокса
+                    toggleEditButton(); // Вызываем функцию для показа/скрытия кнопки Edit
+                });
                 li.appendChild(checkbox);
 
                 li.appendChild(document.createTextNode(item.name));
