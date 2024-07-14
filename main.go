@@ -1,257 +1,255 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "io"
-    "log"
-    "net/http"
-    "os"
-    "sync"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"sync"
 
-    "github.com/go-redis/redis/v8"
-    "github.com/gorilla/mux"
+	"github.com/go-redis/redis/v8"
+	"github.com/gorilla/mux"
 )
 
 type Item struct {
-    Name string `json:"name"`
-    //	Quantity int    `json:"quantity"`
-    Bought   bool   `json:"bought"`
-    Category string `json:"category"` // Поле для категории
+	Name     string `json:"name"`
+	Bought   bool   `json:"bought"`
+	Category string `json:"category"` // Поле для категории
 }
 
 var (
-    mutex sync.Mutex
+	mutex sync.Mutex
 )
 
 func main() {
-    r := mux.NewRouter()
-    r.HandleFunc("/", indexHandler).Methods("GET")
-    r.HandleFunc("/list", listHandler).Methods("GET")
-    r.HandleFunc("/add", addHandler).Methods("POST")
-    r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
-    r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
+	r := mux.NewRouter()
+	r.HandleFunc("/", indexHandler).Methods("GET")
+	r.HandleFunc("/list", listHandler).Methods("GET")
+	r.HandleFunc("/add", addHandler).Methods("POST")
+	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
+	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
 
-    fmt.Println("Server is running on port 8080...")
-    // log.Println(os.Getenv("REDIS_ADDR"), os.Getenv("REDIS_PASSWORD"))
-    log.Fatal(http.ListenAndServe(":8080", r))
+	fmt.Println("Server is running on port 8080...")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-    htmlFile, err := os.Open("index.html")
-    if err != nil {
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	log.Println("Error opening HTML file:", err)
-	return
-    }
-    defer htmlFile.Close()
+	htmlFile, err := os.Open("index.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("Error opening HTML file:", err)
+		return
+	}
+	defer htmlFile.Close()
 
-    // Отправляем содержимое файла как ответ
-    w.Header().Set("Content-Type", "text/html")
-    _, err = io.Copy(w, htmlFile)
-    if err != nil {
-	log.Println("Error sending HTML content:", err)
-    }
+	// Отправляем содержимое файла как ответ
+	w.Header().Set("Content-Type", "text/html")
+	_, err = io.Copy(w, htmlFile)
+	if err != nil {
+		log.Println("Error sending HTML content:", err)
+	}
 }
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
-    ctx := r.Context()
-    client := getRedisClient()
-    defer client.Close()
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
 
-    val, err := client.Get(ctx, "shoppingList").Result()
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    var items []Item
-    err = json.Unmarshal([]byte(val), &items)
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    category := r.URL.Query().Get("category")
-    if category != "" {
-	var filteredItems []Item
-	for _, item := range items {
-	    if item.Category == category {
-		filteredItems = append(filteredItems, item)
-	    }
+	val, err := client.Get(ctx, "shoppingList").Result()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	items = filteredItems
-    }
 
-    json.NewEncoder(w).Encode(items)
+	var items []Item
+	err = json.Unmarshal([]byte(val), &items)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	category := r.URL.Query().Get("category")
+	if category != "" {
+		var filteredItems []Item
+		for _, item := range items {
+			if item.Category == category {
+				filteredItems = append(filteredItems, item)
+			}
+		}
+		items = filteredItems
+	}
+
+	json.NewEncoder(w).Encode(items)
 }
 
 func addHandler(w http.ResponseWriter, r *http.Request) {
-    var newItem Item
-    err := json.NewDecoder(r.Body).Decode(&newItem)
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusBadRequest)
-	return
-    }
-
-    // Устанавливаем категорию "купить" по умолчанию
-    if newItem.Category == "" {
-	newItem.Category = "купить"
-    }
-
-    ctx := r.Context()
-    client := getRedisClient()
-    defer client.Close()
-
-    mutex.Lock()
-    defer mutex.Unlock()
-
-    val, err := client.Get(ctx, "shoppingList").Result()
-    if err != nil && err != redis.Nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    var items []Item
-    if err == nil {
-	err = json.Unmarshal([]byte(val), &items)
+	var newItem Item
+	err := json.NewDecoder(r.Body).Decode(&newItem)
 	if err != nil {
-	    http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-    }
 
-    items = append(items, newItem)
-    logActivity("Added", newItem.Name)
+	// Устанавливаем категорию "купить" по умолчанию
+	if newItem.Category == "" {
+		newItem.Category = "купить"
+	}
 
-    data, err := json.Marshal(items)
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
 
-    err = client.Set(ctx, "shoppingList", data, 0).Err()
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
+	mutex.Lock()
+	defer mutex.Unlock()
 
-// Отправляем JSON-ответ с подтверждением
-    response := map[string]string{"message": "Item added successfully"}
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(response)
+	val, err := client.Get(ctx, "shoppingList").Result()
+	if err != nil && err != redis.Nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var items []Item
+	if err == nil {
+		err = json.Unmarshal([]byte(val), &items)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	items = append(items, newItem)
+	logActivity("Added", newItem.Name)
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Отправляем JSON-ответ с подтверждением
+	response := map[string]string{"message": "Item added successfully"}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
 }
 
 func buyHandler(w http.ResponseWriter, r *http.Request) {
-    vars := mux.Vars(r)
-    itemName := vars["name"]
+	vars := mux.Vars(r)
+	itemName := vars["name"]
 
-    ctx := r.Context()
-    client := getRedisClient()
-    defer client.Close()
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
 
-    mutex.Lock()
-    defer mutex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 
-    val, err := client.Get(ctx, "shoppingList").Result()
-    if err != nil && err != redis.Nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
+	val, err := client.Get(ctx, "shoppingList").Result()
+	if err != nil && err != redis.Nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    var items []Item
-    if err == nil {
-	err = json.Unmarshal([]byte(val), &items)
+	var items []Item
+	if err == nil {
+		err = json.Unmarshal([]byte(val), &items)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	for i := range items {
+		if items[i].Name == itemName {
+			items[i].Bought = !items[i].Bought
+			break
+		}
+	}
+
+	data, err := json.Marshal(items)
 	if err != nil {
-	    http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-    }
 
-    for i := range items {
-	if items[i].Name == itemName {
-	    items[i].Bought = !items[i].Bought
-	    break
+	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-    }
 
-    data, err := json.Marshal(items)
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    err = client.Set(ctx, "shoppingList", data, 0).Err()
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
-    vars := mux.Vars(r)
-    itemName := vars["name"]
+	vars := mux.Vars(r)
+	itemName := vars["name"]
 
-    ctx := r.Context()
-    client := getRedisClient()
-    defer client.Close()
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
 
-    mutex.Lock()
-    defer mutex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 
-    val, err := client.Get(ctx, "shoppingList").Result()
-    if err != nil && err != redis.Nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
+	val, err := client.Get(ctx, "shoppingList").Result()
+	if err != nil && err != redis.Nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    var items []Item
-    if err == nil {
-	err = json.Unmarshal([]byte(val), &items)
+	var items []Item
+	if err == nil {
+		err = json.Unmarshal([]byte(val), &items)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Создаем новый срез для хранения элементов, кроме удаляемого
+	var newItems []Item
+	// Перебираем элементы и копируем их в новый срез, исключая удаляемый
+	for _, item := range items {
+		if item.Name != itemName {
+			newItems = append(newItems, item)
+		}
+	}
+	// Выполняем логирование удаления элемента
+	logActivity("Deleted", itemName)
+
+	data, err := json.Marshal(newItems) // Маршализуем обновленный список
 	if err != nil {
-	    http.Error(w, err.Error(), http.StatusInternalServerError)
-	    return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-    }
 
-    // Создаем новый срез для хранения элементов, кроме удаляемого
-    var newItems []Item
-    // Перебираем элементы и копируем их в новый срез, исключая удаляемый
-    for _, item := range items {
-	if item.Name != itemName {
-	    newItems = append(newItems, item)
+	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-    }
-    // Выполняем логирование удаления элемента
-    logActivity("Deleted", itemName)
 
-    data, err := json.Marshal(newItems) // Маршализуем обновленный список
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    err = client.Set(ctx, "shoppingList", data, 0).Err()
-    if err != nil {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
-	return
-    }
-
-    w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func getRedisClient() *redis.Client {
-    return redis.NewClient(&redis.Options{
-	Addr:     os.Getenv("REDIS_ADDR"),
-	Password: os.Getenv("REDIS_PASSWORD"),
-	DB:       0, // Используемая база данных
-    })
+	return redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_ADDR"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       0, // Используемая база данных
+	})
 }
 
 func logActivity(activity string, itemName string) {
-    // Логгирование действий в консоль
-    log.Printf("%s: %s", activity, itemName)
+	// Логгирование действий в консоль
+	log.Printf("%s: %s", activity, itemName)
 }
