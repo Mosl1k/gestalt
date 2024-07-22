@@ -10,7 +10,7 @@ load_dotenv()
 redis_password = os.getenv('REDIS_PASSWORD')
 
 # Подключение к Redis с использованием пароля
-client = redis.StrictRedis(host='localhost', port=6379, password=redis_password, decode_responses=True)
+client = redis.StrictRedis(host='geshtalt.ddns.net', port=6379, password=redis_password, decode_responses=True)
 
 # Получение данных
 raw_data = client.get('shoppingList')
