@@ -3,7 +3,6 @@ import json
 import os
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из .env файла
 load_dotenv()
 
 # Получение пароля из переменной окружения
@@ -27,4 +26,3 @@ if raw_data:
         print(f"Ошибка при декодировании JSON: {e}")
 else:
     print("Нет данных в ключе 'shoppingList'.")
-    
