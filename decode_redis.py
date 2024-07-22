@@ -27,3 +27,4 @@ if raw_data:
         print(f"Ошибка при декодировании JSON: {e}")
 else:
     print("Нет данных в ключе 'shoppingList'.")
+    
