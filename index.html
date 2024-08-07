@@ -20,6 +20,17 @@
             background: white;
             display: none;
         }
+        /* Styles for navigation buttons */
+        .nav-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+        }
+        .nav-buttons button {
+            font-size: 16px; /* Increase the font size */
+            padding: 10px 20px; /* Increase the padding */
+            margin-left: 10px;
+            cursor: pointer; /* Change cursor to pointer */        }
     </style>
 </head>
 <body>
@@ -53,9 +64,17 @@
         <button onclick="deleteCheckedItems()">Удалить выбранное</button>
     </div>
 
+    <!-- Navigation buttons -->
+    <div class="nav-buttons">
+        <button onclick="navigateFilter('left')">Влево</button>
+        <button onclick="navigateFilter('right')">Вправо</button>
+    </div>
+
     <script>
         let currentEditItem = null;
         let currentFilter = null; // Переменная для хранения текущего фильтра
+        const filters = ['купить', 'не-забыть', null]; // Array of filters
+        let filterIndex = 2; // Start with 'Весь список'
 
         document.addEventListener('DOMContentLoaded', function() {
             loadCurrentState(); // Загрузка состояния при загрузке страницы
@@ -141,6 +160,7 @@
 
         function fetchShoppingList() {
             currentFilter = null;
+            filterIndex = 2; // Reset to 'Весь список'
             updateActiveButton(null);
             fetch('/list')
             .then(response => {
@@ -228,6 +248,7 @@
             })
             .then(data => {
                 currentFilter = category; // Устанавливаем текущий фильтр
+                filterIndex = filters.indexOf(category); // Update filter index
                 renderList(data); // Рендерим список для выбранной категории
                 updateActiveButton(category); // Обновляем активную кнопку
                 updateAddItemCategory(category); // Обновляем категорию для добавления
@@ -310,6 +331,20 @@
         function closeEditModal() {
             currentEditItem = null;
             document.getElementById('editModal').style.display = 'none';
+        }
+
+        function navigateFilter(direction) {
+            if (direction === 'left') {
+                filterIndex = (filterIndex - 1 + filters.length) % filters.length;
+            } else if (direction === 'right') {
+                filterIndex = (filterIndex + 1) % filters.length;
+            }
+            const category = filters[filterIndex];
+            if (category) {
+                filterCategory(category);
+            } else {
+                fetchShoppingList();
+            }
         }
     </script>
 </body>
