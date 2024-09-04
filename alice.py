@@ -43,7 +43,7 @@ def webhook():
     
     if command == '':
         response_text = "Привет, что нужно сделать?"
-    elif command.startswith('запиши'):
+    elif command.startswith('запиши') or command.startswith('не забыть'):
         item_to_record = ' '.join(data['request']['nlu']['tokens'][1:])
         print(f"Записано в список 'не забыть': '{item_to_record}'")
         
