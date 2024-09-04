@@ -4,7 +4,7 @@ import requests
 app = Flask(__name__)
 
 def add_to_shopping_list(item_name, category):
-    url = 'https://geshtalt.ddns.net:443/add'
+    url = 'http://geshtalt.ddns.net:8080/add'
     payload = {
         "name": item_name,
         "category": category
@@ -16,7 +16,7 @@ def add_to_shopping_list(item_name, category):
     return response.json()
 
 def fetch_shopping_list():
-    url = 'https://geshtalt.ddns.net/list'
+    url = 'http://geshtalt.ddns.net:8080/list'
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
