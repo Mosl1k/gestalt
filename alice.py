@@ -71,9 +71,14 @@ def webhook():
             response_text = "В списке 'не забыть': " + ', '.join(items_to_remember)
         else:
             response_text = "Список 'не забыть' пуст."
+    elif command == 'что в холодильнике':
+        items_in_fridge = get_list_by_category('холодос')
+        if items_in_fridge:
+            response_text = "В холодильнике: " + ', '.join(items_in_fridge)
+        else:
+            response_text = "В холодильнике пусто."
     else:
         response_text = "Извините, я не понимаю эту команду."
-    
     response = {
         "version": "1.0",
         "session": {
