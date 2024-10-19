@@ -7,6 +7,7 @@
     <style>
         .купить { color: green; }
         .не-забыть { color: red; }
+        .дом { color: orange; }
         .filter-buttons { margin-bottom: 20px; }
         .filter-buttons button { margin-right: 10px; }
         .active { font-weight: bold; }
@@ -37,6 +38,7 @@
     <div class="filter-buttons">
         <button id="buyButton" onclick="filterCategory('купить')">Купить</button>
         <button id="forgetButton" onclick="filterCategory('не-забыть')">Не забыть</button>
+        <button id="homeButton" onclick="filterCategory('дом')">дом</button>
         <button id="allButton" onclick="fetchShoppingList()">Весь список</button>
     </div>
     <div>
@@ -44,6 +46,7 @@
         <select id="itemCategory">
             <option value="купить">Купить</option>
             <option value="не-забыть">Не забыть</option>
+            <option value="дом">дом</option>
         </select>
         <button onclick="addItem()">Add</button>
     </div>
@@ -55,6 +58,7 @@
         <select id="editItemCategory">
             <option value="купить">Купить</option>
             <option value="не-забыть">Не забыть</option>
+            <option value="дом">дом</option>
         </select>
         <button onclick="saveEditItem()">Save</button>
         <button onclick="closeEditModal()">Cancel</button>
@@ -73,7 +77,7 @@
     <script>
         let currentEditItem = null;
         let currentFilter = null; // Переменная для хранения текущего фильтра
-        const filters = ['купить', 'не-забыть', null]; // Array of filters
+        const filters = ['купить', 'не-забыть', 'дом', null]; // Array of filters
         let filterIndex = 2; // Start with 'Весь список'
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -183,7 +187,6 @@
             data.forEach(item => {
                 const li = document.createElement('li');
                 li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
-
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.dataset.name = item.name;
@@ -271,6 +274,8 @@
                 document.getElementById('buyButton').classList.add('active');
             } else if (category === 'не-забыть') {
                 document.getElementById('forgetButton').classList.add('active');
+            } else if (category === 'дом') {
+                document.getElementById('homeButton').classList.add('active');
             } else {
                 document.getElementById('allButton').classList.add('active');
             }
