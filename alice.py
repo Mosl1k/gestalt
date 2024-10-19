@@ -83,18 +83,16 @@ def webhook():
         if items_in_fridge:
             print(f"Продукты в холодильнике: {items_in_fridge}")
             # Формируем запрос к gpt через g4f
-            prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}? Назови только названия блюд."
+            prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}? Назови только 5 названий блюд."
             try:
                 # Отправляем запрос через g4f
                 response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
                 print(f"Ответ от GPT: {response_from_gpt}")
-                
                 # Проверим формат ответа
                 if isinstance(response_from_gpt, dict) and 'choices' in response_from_gpt:
-                    recipe = response_from_gpt['choices'][0].get('message', {}).get('content', 'Не удалось получить рецепт.')
+                   recipe = response_from_gpt['choices'][0].get('message', {}).get('content', 'Не удалось получить рецепт.')
                 else:
-                    recipe = "Не удалось получить корректный ответ от GPT."
-                
+                   recipe = "Не удалось получить корректный ответ от GPT."                
                 print(f"Рецепт: {recipe}")
                 response_text = f"Вот что можно приготовить: {recipe}"
             except Exception as e:
