@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import requests
+import g4f
 
 app = Flask(__name__)
 
@@ -77,8 +78,28 @@ def webhook():
             response_text = "В холодильнике: " + ', '.join(items_in_fridge)
         else:
             response_text = "В холодильнике пусто."
+    elif command == 'что приготовить':
+        items_in_fridge = get_list_by_category('холодос')
+        if items_in_fridge:
+            print(f"Продукты в холодильнике: {items_in_fridge}")
+            # Формируем запрос к gpt через g4f
+            prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}?"
+            try:
+                # Отправляем запрос через g4f
+                response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
+                recipe = response_from_gpt['choices'][0]['message']['content']
+                print(f"Ответ от GPT: {recipe}")
+                response_text = f"Вот что можно приготовить: {recipe}"
+            except Exception as e:
+                print(f"Ошибка при обращении к GPT: {e}")
+                response_text = "Извините, произошла ошибка при запросе рецепта."
+        else:
+            response_text = "В холодильнике пусто, нечего приготовить."
+
     else:
         response_text = "Извините, я не понимаю эту команду."
+
+
     response = {
         "version": "1.0",
         "session": {
