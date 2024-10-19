@@ -94,7 +94,7 @@ def webhook():
                # else:
                 #   recipe = "Не удалось получить корректный ответ от GPT."                
                # print(f"Рецепт: {recipe}")
-                response_text = f"Вот что можно приготовить: {response_from_gpt}"
+                response_text = f"{response_from_gpt}"
             except Exception as e:
                 print(f"Ошибка при обращении к GPT: {e}")
                 response_text = "Извините, произошла ошибка при запросе рецепта."
