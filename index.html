@@ -86,7 +86,7 @@
         let currentEditItem = null;
         let currentFilter = null; // Переменная для хранения текущего фильтра
         const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null]; // Array of filters
-        let filterIndex = 0; // Start with 'Весь список'
+        let filterIndex = filters.length - 1;; // Start with 'Весь список'
 
         document.addEventListener('DOMContentLoaded', function() {
             loadCurrentState(); // Загрузка состояния при загрузке страницы
@@ -295,12 +295,20 @@
 
         function saveCurrentState() {
             localStorage.setItem('currentFilter', currentFilter);
+            localStorage.setItem('filterIndex', filterIndex); // Сохраняем индекс фильтра
         }
 
         function loadCurrentState() {
             const savedFilter = localStorage.getItem('currentFilter');
-            if (savedFilter) {
-                filterCategory(savedFilter);
+            const savedFilterIndex = localStorage.getItem('filterIndex');
+
+            if (savedFilter && savedFilterIndex !== null) {
+                filterIndex = parseInt(savedFilterIndex, 10); // Восстанавливаем индекс
+                if (savedFilter === "null") {
+                    fetchShoppingList(); // Если "весь список", загружаем его
+                } else {
+                    filterCategory(savedFilter); // Иначе восстанавливаем текущий фильтр
+                }
             } else {
                 fetchShoppingList();
             }
@@ -351,16 +359,43 @@
         }
 
         function navigateFilter(direction) {
+            const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null]; // Массив фильтров (null для "весь список")
+
+            // Если направление влево
             if (direction === 'left') {
-                filterIndex = (filterIndex - 1 + filters.length) % filters.length;
+                if (filterIndex === filters.length - 1) {
+                    // Если находимся на "весь список", переходим на "холодос"
+                    filterIndex = filters.length - 2; // Индекс "холодос"
+                } else if (filterIndex > 0) {
+                    // Уменьшаем индекс, если он больше 0
+                    filterIndex -= 1; 
+                }
             } else if (direction === 'right') {
-                filterIndex = (filterIndex + 1) % filters.length;
+                if (filterIndex < filters.length - 2) {
+                    // Увеличиваем индекс, если он меньше последнего элемента (исключая "весь список")
+                    filterIndex += 1; 
+                }
             }
+
             const category = filters[filterIndex];
-            if (category) {
-                filterCategory(category);
-            } else {
+
+            // Проверяем, достигли конца или начала
+            if (category === null) {
+                // Если это "весь список", вызываем fetchShoppingList
                 fetchShoppingList();
+            } else {
+                // Иначе фильтруем по выбранной категории
+                filterCategory(category);
+            }
+
+            updateActiveButton(category); // Обновляем активную кнопку после навигации
+            saveCurrentState(); // Сохраняем текущее состояние после изменения фильтра
+
+            // Убедимся, что индексы не выходят за границы
+            if (filterIndex < 0) {
+                filterIndex = 0; // Не даем индексам выходить за нижнюю границу
+            } else if (filterIndex >= filters.length) {
+                filterIndex = filters.length - 1; // Не даем индексам выходить за верхнюю границу
             }
         }
     </script>
