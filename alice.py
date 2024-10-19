@@ -83,7 +83,7 @@ def webhook():
         if items_in_fridge:
             print(f"Продукты в холодильнике: {items_in_fridge}")
             # Формируем запрос к gpt через g4f
-            prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}?"
+            prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}? Назови только названия блюд."
             try:
                 # Отправляем запрос через g4f
                 response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
