@@ -9,6 +9,7 @@
         .не-забыть { color: red; }
         .дом { color: orange; }
         .машина { color: blue; }
+        .холодос { color: purple; }
         .filter-buttons { margin-bottom: 20px; }
         .filter-buttons button { margin-right: 10px; }
         .active { font-weight: bold; }
@@ -41,6 +42,7 @@
         <button id="forgetButton" onclick="filterCategory('не-забыть')">Не забыть</button>
         <button id="homeButton" onclick="filterCategory('дом')">дом</button>
         <button id="carButton" onclick="filterCategory('машина')">машина</button>
+        <button id="frigeButton" onclick="filterCategory('холодос')">холодос</button>
         <button id="allButton" onclick="fetchShoppingList()">Весь список</button>
     </div>
     <div>
@@ -50,6 +52,7 @@
             <option value="не-забыть">Не забыть</option>
             <option value="дом">дом</option>
             <option value="машина">машина</option>
+            <option value="холодос">холодос</option>
         </select>
         <button onclick="addItem()">Add</button>
     </div>
@@ -63,6 +66,7 @@
             <option value="не-забыть">Не забыть</option>
             <option value="дом">дом</option>
             <option value="машина">машина</option>
+            <option value="холодос">холодос</option>
         </select>
         <button onclick="saveEditItem()">Save</button>
         <button onclick="closeEditModal()">Cancel</button>
@@ -81,7 +85,7 @@
     <script>
         let currentEditItem = null;
         let currentFilter = null; // Переменная для хранения текущего фильтра
-        const filters = ['купить', 'не-забыть', 'дом', 'машина', null]; // Array of filters
+        const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null]; // Array of filters
         let filterIndex = 2; // Start with 'Весь список'
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -282,6 +286,8 @@
                 document.getElementById('homeButton').classList.add('active');
             } else if (category === 'машина') {
                 document.getElementById('carButton').classList.add('active');
+            } else if (category === 'холодос') {
+                document.getElementById('frigeButton').classList.add('active');    
             } else {
                 document.getElementById('allButton').classList.add('active');
             }
