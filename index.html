@@ -172,7 +172,7 @@
 
         function fetchShoppingList() {
             currentFilter = null;
-            filterIndex = 2; // Reset to 'Весь список'
+            filterIndex = 0; // Reset to 'Весь список'
             updateActiveButton(null);
             fetch('/list')
             .then(response => {
