@@ -89,12 +89,12 @@ def webhook():
                 response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
                 print(f"Ответ от GPT: {response_from_gpt}")
                 # Проверим формат ответа
-                if isinstance(response_from_gpt, dict) and 'choices' in response_from_gpt and len(response_from_gpt['choices']) > 0:
-                   recipe = response_from_gpt['choices'][0]['message']['content'] if 'message' in response_from_gpt['choices'][0] else 'Не удалось получить рецепт.'
-                else:
-                   recipe = "Не удалось получить корректный ответ от GPT."                
-                print(f"Рецепт: {recipe}")
-                response_text = f"Вот что можно приготовить: {recipe}"
+              #  if isinstance(response_from_gpt, dict) and 'choices' in response_from_gpt and len(response_from_gpt['choices']) > 0:
+               #    recipe = response_from_gpt['choices'][0]['message']['content'] if 'message' in response_from_gpt['choices'][0] else 'Не удалось получить рецепт.'
+               # else:
+                #   recipe = "Не удалось получить корректный ответ от GPT."                
+               # print(f"Рецепт: {recipe}")
+                response_text = f"Вот что можно приготовить: {response_from_gpt}"
             except Exception as e:
                 print(f"Ошибка при обращении к GPT: {e}")
                 response_text = "Извините, произошла ошибка при запросе рецепта."
