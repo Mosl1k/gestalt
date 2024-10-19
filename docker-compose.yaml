@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile  # Dockerfile для Golang
-    container_name:   geshtalt
+    container_name: geshtalt
     environment:
       - REDIS_ADDR=redis:6379
     env_file: .env
@@ -38,7 +38,7 @@ services:
       - "2112:2112"
     depends_on:
       - redis
-      - web
+      - geshtalt
     restart: always
 
  
