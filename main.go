@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/go-redis/redis/v8"
@@ -21,12 +23,26 @@ type Item struct {
 }
 
 var (
-	mutex sync.Mutex
+	mutex    sync.Mutex
+	username string
+	password string
 )
+
+func init() {
+	// Читаем логин и пароль из переменных окружения, переданных через docker-compose
+	username = os.Getenv("USERNAME")
+	password = os.Getenv("PASSWORD")
+	if username == "" || password == "" {
+		log.Fatal("USERNAME and PASSWORD must be set in .env")
+	}
+}
 
 func main() {
 	r := mux.NewRouter()
+
+	r.Use(authMiddleware)
 	r.HandleFunc("/", indexHandler).Methods("GET")
+	r.HandleFunc("/auth", authHandler).Methods("GET") // Новый эндпоинт для передачи credentials
 	r.HandleFunc("/list", listHandler).Methods("GET")
 	r.HandleFunc("/add", addHandler).Methods("POST")
 	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
@@ -35,6 +51,46 @@ func main() {
 	r.HandleFunc("/reorder", reorderHandler).Methods("POST")
 	fmt.Println("Server is running on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))
+}
+
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Authorization required", http.StatusUnauthorized)
+			return
+		}
+
+		if !strings.HasPrefix(authHeader, "Basic ") {
+			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		encodedCredentials := strings.TrimPrefix(authHeader, "Basic ")
+		decodedCredentials, err := base64.StdEncoding.DecodeString(encodedCredentials)
+		if err != nil {
+			http.Error(w, "Invalid base64 encoding", http.StatusUnauthorized)
+			return
+		}
+
+		credentials := strings.SplitN(string(decodedCredentials), ":", 2)
+		if len(credentials) != 2 || credentials[0] != username || credentials[1] != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func authHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"username": username,
+		"password": password,
+	})
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +216,6 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем старую категорию из URL-параметра (или предполагаем текущую)
 	oldCategory := r.URL.Query().Get("oldCategory")
 	if oldCategory == "" {
 		http.Error(w, "Old category is required", http.StatusBadRequest)
@@ -174,7 +229,6 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	// 1. Удаляем элемент из старой категории
 	oldKey := "shoppingList:" + oldCategory
 	val, err := client.Get(ctx, oldKey).Result()
 	if err != nil && err != redis.Nil {
@@ -210,7 +264,6 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Добавляем элемент в новую категорию
 	newKey := "shoppingList:" + editedItem.Category
 	val, err = client.Get(ctx, newKey).Result()
 	if err != nil && err != redis.Nil {
@@ -227,9 +280,8 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Обновляем приоритет, если он в допустимом диапазоне
 	if editedItem.Priority < 1 || editedItem.Priority > 3 {
-		editedItem.Priority = 2 // По умолчанию средний, если вне диапазона
+		editedItem.Priority = 2
 	}
 
 	newItems = append(newItems, editedItem)

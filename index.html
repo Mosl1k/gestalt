@@ -104,7 +104,7 @@
         .priority-dot.medium { background-color: #ffc107; }
         .priority-dot.high { background-color: #dc3545; }
         #deleteSelectedButton {
-            display: none; /* Скрываем кнопку по умолчанию */
+            display: none;
         }
     </style>
 </head>
@@ -173,9 +173,26 @@
         const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос'];
         let filterIndex = 0;
         let currentItems = [];
+        let authHeader = '';
+
+        // Получаем credentials с сервера
+        async function fetchAuthCredentials() {
+            try {
+                const response = await fetch('/auth');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch auth credentials');
+                }
+                const data = await response.json();
+                authHeader = 'Basic ' + btoa(`${data.username}:${data.password}`);
+                loadCurrentState();
+            } catch (error) {
+                console.error('Error fetching auth credentials:', error);
+                alert('Не удалось загрузить данные авторизации. Проверьте сервер.');
+            }
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadCurrentState();
+            fetchAuthCredentials();
             setupDragAndDrop();
         });
 
@@ -215,7 +232,10 @@
         function saveOrderToServer() {
             fetch('/reorder', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify(currentItems),
             })
             .then(response => {
@@ -236,7 +256,10 @@
 
             fetch('/add', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify({
                     name: itemName,
                     category: itemCategory,
@@ -249,13 +272,21 @@
                 closeAddModal();
                 filterCategory(currentFilter);
             })
-            .catch(error => console.error('There was an error!', error));
+            .catch(error => {
+                console.error('There was an error!', error);
+                if (error.message === 'Network response was not ok') {
+                    alert('Ошибка авторизации. Проверьте настройки сервера.');
+                }
+            });
         }
 
         function toggleBought(name, checked) {
             fetch('/buy/' + encodeURIComponent(name), {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify({ bought: checked, category: currentFilter }),
             })
             .then(response => {
@@ -268,6 +299,9 @@
         function deleteItem(name) {
             fetch(`/delete/${encodeURIComponent(name)}?category=${encodeURIComponent(currentFilter)}`, {
                 method: 'DELETE',
+                headers: {
+                    'Authorization': authHeader
+                },
             })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
@@ -277,7 +311,11 @@
         }
 
         function filterCategory(category) {
-            fetch(`/list?category=${encodeURIComponent(category)}`)
+            fetch(`/list?category=${encodeURIComponent(category)}`, {
+                headers: {
+                    'Authorization': authHeader
+                }
+            })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
@@ -290,7 +328,12 @@
                 updateActiveButton(category);
                 saveCurrentState();
             })
-            .catch(error => console.error('There was an error!', error));
+            .catch(error => {
+                console.error('There was an error!', error);
+                if (error.message === 'Network response was not ok') {
+                    alert('Ошибка авторизации. Проверьте настройки сервера.');
+                }
+            });
         }
 
         function renderList(data) {
@@ -334,7 +377,7 @@
 
                 shoppingList.appendChild(li);
             });
-            updateDeleteButtonVisibility(); // Обновляем видимость кнопки после рендера
+            updateDeleteButtonVisibility();
         }
 
         function updateDeleteButtonVisibility() {
@@ -392,7 +435,10 @@
 
             fetch(`/edit/${encodeURIComponent(currentEditItem)}?oldCategory=${encodeURIComponent(currentFilter)}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': authHeader
+                },
                 body: JSON.stringify({
                     name: newName,
                     category: newCategory,
