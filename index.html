@@ -10,18 +10,46 @@
         .дом { color: orange; }
         .машина { color: blue; }
         .холодос { color: purple; }
-        .filter-buttons { margin-bottom: 20px; }
-        .filter-buttons button { margin-right: 10px; }
+        .filter-buttons {
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+        }
+        .filter-buttons button {
+            flex: 1;
+            min-width: 80px;
+            padding: 5px;
+        }
         .active { font-weight: bold; }
-        #editModal {
+        #editModal, #addModal {
             position: fixed;
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
             border: 1px solid #ccc;
-            padding: 20px;
+            padding: 30px;
             background: white;
             display: none;
+            z-index: 1000;
+            width: 400px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        #editModal input, #addModal input,
+        #editModal select, #addModal select,
+        #editModal button, #addModal button {
+            font-size: 18px;
+            padding: 10px;
+            margin: 10px 0;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #editModal button, #addModal button {
+            margin-right: 20px;
+        }
+        #editModal button:last-child, #addModal button:last-child {
+            margin-right: 0;
         }
         .nav-buttons {
             position: fixed;
@@ -34,17 +62,47 @@
             margin-left: 10px;
             cursor: pointer;
         }
+        .add-button {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+        }
+        .add-button button {
+            font-size: 16px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
         .priority-low { background-color: #d4edda; }
         .priority-medium { background-color: #fff3cd; }
         .priority-high { background-color: #f8d7da; }
+        #shoppingList {
+            padding-left: 0;
+            list-style: none;
+        }
         #shoppingList li {
             cursor: move;
             padding: 5px;
+            padding-left: 0;
             margin: 5px 0;
+            margin-left: 0;
+            display: flex;
+            align-items: center;
         }
         #shoppingList li.dragging {
             opacity: 0.5;
         }
+        #shoppingList li button {
+            margin-left: 10px; /* Отступ между кнопками Delete и Edit */
+        }
+        .priority-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .priority-dot.low { background-color: #28a745; }
+        .priority-dot.medium { background-color: #ffc107; }
+        .priority-dot.high { background-color: #dc3545; }
     </style>
 </head>
 <body>
@@ -54,22 +112,6 @@
         <button id="homeButton" onclick="filterCategory('дом')">дом</button>
         <button id="carButton" onclick="filterCategory('машина')">машина</button>
         <button id="frigeButton" onclick="filterCategory('холодос')">холодос</button>
-    </div>
-    <div>
-        <input type="text" id="itemName" placeholder="Item name">
-        <select id="itemCategory">
-            <option value="купить">Купить</option>
-            <option value="не-забыть">Не забыть</option>
-            <option value="дом">дом</option>
-            <option value="машина">машина</option>
-            <option value="холодос">холодос</option>
-        </select>
-        <select id="itemPriority">
-            <option value="1">Низкий</option>
-            <option value="2" selected>Средний</option>
-            <option value="3">Высокий</option>
-        </select>
-        <button onclick="addItem()">Add</button>
     </div>
     <ul id="shoppingList"></ul>
 
@@ -91,6 +133,24 @@
         <button onclick="closeEditModal()">Cancel</button>
     </div>
 
+    <div id="addModal">
+        <input type="text" id="addItemName" placeholder="Item name">
+        <select id="addItemCategory">
+            <option value="купить">Купить</option>
+            <option value="не-забыть">Не забыть</option>
+            <option value="дом">дом</option>
+            <option value="машина">машина</option>
+            <option value="холодос">холодос</option>
+        </select>
+        <select id="addItemPriority">
+            <option value="1">Низкий</option>
+            <option value="2" selected>Средний</option>
+            <option value="3">Высокий</option>
+        </select>
+        <button onclick="addItem()">Add</button>
+        <button onclick="closeAddModal()">Cancel</button>
+    </div>
+
     <div>
         <button onclick="deleteCheckedItems()">Удалить выбранное</button>
     </div>
@@ -98,6 +158,10 @@
     <div class="nav-buttons">
         <button onclick="navigateFilter('left')">Влево</button>
         <button onclick="navigateFilter('right')">Вправо</button>
+    </div>
+
+    <div class="add-button">
+        <button onclick="openAddModal()">Add</button>
     </div>
 
     <script>
@@ -158,11 +222,11 @@
         }
 
         function addItem() {
-            const itemNameInput = document.getElementById('itemName');
-            const itemCategoryInput = document.getElementById('itemCategory');
-            const itemPriorityInput = document.getElementById('itemPriority');
+            const itemNameInput = document.getElementById('addItemName');
+            const itemCategoryInput = document.getElementById('addItemCategory');
+            const itemPriorityInput = document.getElementById('addItemPriority');
             const itemName = itemNameInput.value.trim();
-            const itemCategory = currentFilter || itemCategoryInput.value.trim();
+            const itemCategory = itemCategoryInput.value.trim();
             const itemPriority = parseInt(itemPriorityInput.value);
 
             if (!itemName || !itemCategory) return;
@@ -179,7 +243,7 @@
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 itemNameInput.value = '';
-                itemCategoryInput.value = currentFilter;
+                closeAddModal();
                 filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
@@ -221,7 +285,6 @@
                 currentItems = data;
                 renderList(data);
                 updateActiveButton(category);
-                updateAddItemCategory(category);
                 saveCurrentState();
             })
             .catch(error => console.error('There was an error!', error));
@@ -236,7 +299,11 @@
                 li.dataset.index = index;
                 li.className = item.category.replace(/\s+/g, '-');
                 li.classList.add(`priority-${item.priority === 1 ? 'low' : item.priority === 2 ? 'medium' : 'high'}`);
-                li.appendChild(document.createTextNode(` [${item.priority === 1 ? 'Низкий' : item.priority === 2 ? 'Средний' : 'Высокий'}] `));
+
+                const dot = document.createElement('span');
+                dot.className = 'priority-dot';
+                dot.classList.add(item.priority === 1 ? 'low' : item.priority === 2 ? 'medium' : 'high');
+                li.appendChild(dot);
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
@@ -270,10 +337,6 @@
                 const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
                 checkboxes.forEach(checkbox => deleteItem(checkbox.dataset.name));
             }
-        }
-
-        function updateAddItemCategory(category) {
-            document.getElementById('itemCategory').value = category;
         }
 
         function updateActiveButton(category) {
@@ -329,7 +392,7 @@
                 if (!response.ok) throw new Error('Network response was not ok');
                 currentEditItem = null;
                 document.getElementById('editModal').style.display = 'none';
-                filterCategory(currentFilter); // Обновляем текущую категорию
+                filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
         }
@@ -337,6 +400,17 @@
         function closeEditModal() {
             currentEditItem = null;
             document.getElementById('editModal').style.display = 'none';
+        }
+
+        function openAddModal() {
+            document.getElementById('addItemName').value = '';
+            document.getElementById('addItemCategory').value = currentFilter;
+            document.getElementById('addItemPriority').value = '2';
+            document.getElementById('addModal').style.display = 'block';
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
         }
 
         function navigateFilter(direction) {
