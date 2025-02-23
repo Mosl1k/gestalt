@@ -160,6 +160,13 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Получаем старую категорию из URL-параметра (или предполагаем текущую)
+	oldCategory := r.URL.Query().Get("oldCategory")
+	if oldCategory == "" {
+		http.Error(w, "Old category is required", http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 	client := getRedisClient()
 	defer client.Close()
@@ -167,40 +174,74 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	key := "shoppingList:" + editedItem.Category
-	val, err := client.Get(ctx, key).Result()
+	// 1. Удаляем элемент из старой категории
+	oldKey := "shoppingList:" + oldCategory
+	val, err := client.Get(ctx, oldKey).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	var items []Item
+	var oldItems []Item
 	if err == nil {
-		err = json.Unmarshal([]byte(val), &items)
+		err = json.Unmarshal([]byte(val), &oldItems)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	for i := range items {
-		if items[i].Name == oldName {
-			items[i].Name = editedItem.Name
-			items[i].Category = editedItem.Category
-			if editedItem.Priority >= 1 && editedItem.Priority <= 3 {
-				items[i].Priority = editedItem.Priority
-			}
-			break
+	var newOldItems []Item
+	for _, item := range oldItems {
+		if item.Name != oldName {
+			newOldItems = append(newOldItems, item)
 		}
 	}
 
-	data, err := json.Marshal(items)
+	data, err := json.Marshal(newOldItems)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err = client.Set(ctx, key, data, 0).Err()
+	err = client.Set(ctx, oldKey, data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Добавляем элемент в новую категорию
+	newKey := "shoppingList:" + editedItem.Category
+	val, err = client.Get(ctx, newKey).Result()
+	if err != nil && err != redis.Nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var newItems []Item
+	if err == nil {
+		err = json.Unmarshal([]byte(val), &newItems)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Обновляем приоритет, если он в допустимом диапазоне
+	if editedItem.Priority < 1 || editedItem.Priority > 3 {
+		editedItem.Priority = 2 // По умолчанию средний, если вне диапазона
+	}
+
+	newItems = append(newItems, editedItem)
+	logActivity("Edited", editedItem.Name)
+
+	data, err = json.Marshal(newItems)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = client.Set(ctx, newKey, data, 0).Err()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

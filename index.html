@@ -102,7 +102,7 @@
 
     <script>
         let currentEditItem = null;
-        let currentFilter = 'купить'; // Начальная категория
+        let currentFilter = 'купить';
         const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос'];
         let filterIndex = 0;
         let currentItems = [];
@@ -298,7 +298,7 @@
                 filterIndex = parseInt(savedFilterIndex, 10);
                 filterCategory(savedFilter);
             } else {
-                filterCategory('купить'); // По умолчанию открываем "купить"
+                filterCategory('купить');
             }
         }
 
@@ -316,7 +316,7 @@
             const newPriority = parseInt(document.getElementById('editItemPriority').value);
             if (!newName || !newCategory) return;
 
-            fetch('/edit/' + encodeURIComponent(currentEditItem), {
+            fetch(`/edit/${encodeURIComponent(currentEditItem)}?oldCategory=${encodeURIComponent(currentFilter)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -329,7 +329,7 @@
                 if (!response.ok) throw new Error('Network response was not ok');
                 currentEditItem = null;
                 document.getElementById('editModal').style.display = 'none';
-                filterCategory(currentFilter);
+                filterCategory(currentFilter); // Обновляем текущую категорию
             })
             .catch(error => console.error('There was an error!', error));
         }
