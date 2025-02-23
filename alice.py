@@ -1,39 +1,48 @@
 from flask import Flask, request, jsonify
 import requests
 import g4f
+import os
+import base64
 
 app = Flask(__name__)
 
+# Хост и порт для обращения к geshtalt внутри Docker-сети
+GESHTALT_HOST = 'geshtalt'
+GESHTALT_PORT = '8080'
+BASE_URL = f'http://{GESHTALT_HOST}:{GESHTALT_PORT}'
+
+# Получаем логин и пароль из .env
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
+
+# Формируем заголовок Basic Auth
+AUTH_HEADER = {
+    "Authorization": f"Basic {base64.b64encode(f'{USERNAME}:{PASSWORD}'.encode()).decode()}",
+    "Content-Type": "application/json"
+}
+
 def add_to_shopping_list(item_name, category):
-    url = 'http://179.43.176.207:8080/add'
+    url = f'{BASE_URL}/add'
     payload = {
         "name": item_name,
         "category": category
     }
-    headers = {
-        "Content-Type": "application/json"
-    }
-    response = requests.post(url, json=payload, headers=headers)
+    response = requests.post(url, json=payload, headers=AUTH_HEADER)
     return response.json()
 
-def fetch_shopping_list():
-    url = 'http://179.43.176.207:8080/list'
-    response = requests.get(url)
+def get_list_by_category(category):
+    url = f'{BASE_URL}/list?category={category}'
+    response = requests.get(url, headers=AUTH_HEADER)
     if response.status_code == 200:
         data = response.json()
-        print(f"Полученные данные: {data}")  # Логируем полученные данные для отладки
-        return data
+        print(f"Полученные данные для категории '{category}': {data}")
+        # Фильтруем элементы по категории (на случай, если сервер не делает это сам)
+        filtered_items = [item['name'] for item in data if item.get('category', '').lower() == category.lower()]
+        print(f"Элементы в категории '{category}': {filtered_items}")
+        return filtered_items
     else:
         print(f"Ошибка получения данных: {response.status_code}, текст ошибки: {response.text}")
         return []
-
-def get_list_by_category(category):
-    shopping_list = fetch_shopping_list()
-    print(f"Список покупок: {shopping_list}")  # Логируем полный список покупок
-    # Приводим категорию и названия к нижнему регистру для корректного сравнения
-    filtered_items = [item['name'] for item in shopping_list if item.get('category', '').lower() == category.lower()]
-    print(f"Элементы в категории '{category}': {filtered_items}")  # Логируем отфильтрованные элементы
-    return filtered_items
 
 @app.route('/', methods=['POST'])
 def webhook():
@@ -82,28 +91,18 @@ def webhook():
         items_in_fridge = get_list_by_category('холодос')
         if items_in_fridge:
             print(f"Продукты в холодильнике: {items_in_fridge}")
-            # Формируем запрос к gpt через g4f
             prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}? Назови только 5 названий блюд."
             try:
-                # Отправляем запрос через g4f
                 response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
                 print(f"Ответ от GPT: {response_from_gpt}")
-                # Проверим формат ответа
-              #  if isinstance(response_from_gpt, dict) and 'choices' in response_from_gpt and len(response_from_gpt['choices']) > 0:
-               #    recipe = response_from_gpt['choices'][0]['message']['content'] if 'message' in response_from_gpt['choices'][0] else 'Не удалось получить рецепт.'
-               # else:
-                #   recipe = "Не удалось получить корректный ответ от GPT."                
-               # print(f"Рецепт: {recipe}")
                 response_text = f"{response_from_gpt}"
             except Exception as e:
                 print(f"Ошибка при обращении к GPT: {e}")
                 response_text = "Извините, произошла ошибка при запросе рецепта."
         else:
             response_text = "В холодильнике пусто, нечего приготовить."
-
     else:
         response_text = "Извините, я не понимаю эту команду."
-
 
     response = {
         "version": "1.0",
@@ -119,7 +118,7 @@ def webhook():
         }
     }
     
-    print("Response to be sent: ", response)  # Логируем формируемый ответ
+    print("Response to be sent: ", response)
     
     return jsonify(response)
 

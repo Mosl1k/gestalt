@@ -34,6 +34,8 @@ services:
       context: .
       dockerfile: Dockerfile.python  # Dockerfile для Python
     container_name: alice
+    env_file:
+      - .env
     ports:
       - "2112:2112"
     depends_on:
