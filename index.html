@@ -92,7 +92,7 @@
             opacity: 0.5;
         }
         #shoppingList li button {
-            margin-left: 10px; /* Отступ между кнопками Delete и Edit */
+            margin-left: 10px;
         }
         .priority-dot {
             width: 10px;
@@ -103,6 +103,9 @@
         .priority-dot.low { background-color: #28a745; }
         .priority-dot.medium { background-color: #ffc107; }
         .priority-dot.high { background-color: #dc3545; }
+        #deleteSelectedButton {
+            display: none; /* Скрываем кнопку по умолчанию */
+        }
     </style>
 </head>
 <body>
@@ -152,7 +155,7 @@
     </div>
 
     <div>
-        <button onclick="deleteCheckedItems()">Удалить выбранное</button>
+        <button id="deleteSelectedButton" onclick="deleteCheckedItems()">Удалить выбранное</button>
     </div>
 
     <div class="nav-buttons">
@@ -311,6 +314,7 @@
                 checkbox.checked = item.bought;
                 checkbox.addEventListener('change', function() {
                     toggleBought(item.name, this.checked);
+                    updateDeleteButtonVisibility();
                 });
                 li.appendChild(checkbox);
 
@@ -330,6 +334,13 @@
 
                 shoppingList.appendChild(li);
             });
+            updateDeleteButtonVisibility(); // Обновляем видимость кнопки после рендера
+        }
+
+        function updateDeleteButtonVisibility() {
+            const checkedCount = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked').length;
+            const deleteButton = document.getElementById('deleteSelectedButton');
+            deleteButton.style.display = checkedCount >= 2 ? 'inline-block' : 'none';
         }
 
         function deleteCheckedItems() {
