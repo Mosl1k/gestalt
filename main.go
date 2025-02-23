@@ -16,7 +16,8 @@ import (
 type Item struct {
 	Name     string `json:"name"`
 	Bought   bool   `json:"bought"`
-	Category string `json:"category"` // Поле для категории
+	Category string `json:"category"`
+	Priority int    `json:"priority"` // 1 - низкий, 2 - средний, 3 - высокий
 }
 
 var (
@@ -44,7 +45,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer htmlFile.Close()
 
-	// Отправляем содержимое файла как ответ
 	w.Header().Set("Content-Type", "text/html")
 	_, err = io.Copy(w, htmlFile)
 	if err != nil {
@@ -92,9 +92,18 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Устанавливаем категорию "купить" по умолчанию
 	if newItem.Category == "" {
 		newItem.Category = "купить"
+	}
+
+	// Устанавливаем приоритет 2 (средний) по умолчанию, если не указан
+	if newItem.Priority == 0 {
+		newItem.Priority = 2
+	}
+
+	// Ограничиваем приоритет значениями 1-3
+	if newItem.Priority < 1 || newItem.Priority > 3 {
+		newItem.Priority = 2
 	}
 
 	ctx := r.Context()
@@ -134,7 +143,6 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отправляем JSON-ответ с подтверждением
 	response := map[string]string{"message": "Item added successfully"}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -178,10 +186,14 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		if items[i].Name == oldName {
 			items[i].Name = editedItem.Name
 			items[i].Category = editedItem.Category
+			// Ограничиваем приоритет значениями 1-3
+			if editedItem.Priority >= 1 && editedItem.Priority <= 3 {
+				items[i].Priority = editedItem.Priority
+			}
 			break
 		}
 	}
-	//dsfsdss
+
 	data, err := json.Marshal(items)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -232,7 +244,6 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Находим элемент в списке и обновляем его состояние
 	for i := range items {
 		if items[i].Name == itemName {
 			items[i].Bought = item.Bought
@@ -281,18 +292,15 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Создаем новый срез для хранения элементов, кроме удаляемого
 	var newItems []Item
-	// Перебираем элементы и копируем их в новый срез, исключая удаляемый
 	for _, item := range items {
 		if item.Name != itemName {
 			newItems = append(newItems, item)
 		}
 	}
-	// Выполняем логирование удаления элемента
 	logActivity("Deleted", itemName)
 
-	data, err := json.Marshal(newItems) // Маршализуем обновленный список
+	data, err := json.Marshal(newItems)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -311,11 +319,10 @@ func getRedisClient() *redis.Client {
 	return redis.NewClient(&redis.Options{
 		Addr:     os.Getenv("REDIS_ADDR"),
 		Password: os.Getenv("REDIS_PASSWORD"),
-		DB:       0, // Используемая база данных
+		DB:       0,
 	})
 }
 
-func logActivity(activity string, itemName string) {
-	// Логгирование действий в консоль
-	log.Printf("%s: %s", activity, itemName)
+func logActivity(action, itemName string) {
+	log.Printf("%s item: %s", action, itemName)
 }

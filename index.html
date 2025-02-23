@@ -23,17 +23,20 @@
             background: white;
             display: none;
         }
-        /* Styles for navigation buttons */
         .nav-buttons {
             position: fixed;
             bottom: 20px;
             right: 20px;
         }
         .nav-buttons button {
-            font-size: 16px; /* Increase the font size */
-            padding: 10px 20px; /* Increase the dfdding */
+            font-size: 16px;
+            padding: 10px 20px;
             margin-left: 10px;
-            cursor: pointer; /* Change cursor to pointer */        }
+            cursor: pointer;
+        }
+        .priority-low { background-color: #d4edda; }
+        .priority-medium { background-color: #fff3cd; }
+        .priority-high { background-color: #f8d7da; }
     </style>
 </head>
 <body>
@@ -54,11 +57,15 @@
             <option value="машина">машина</option>
             <option value="холодос">холодос</option>
         </select>
+        <select id="itemPriority">
+            <option value="1">Низкий</option>
+            <option value="2" selected>Средний</option>
+            <option value="3">Высокий</option>
+        </select>
         <button onclick="addItem()">Add</button>
     </div>
     <ul id="shoppingList"></ul>
 
-    <!-- Модальное окно для редактирования -->
     <div id="editModal">
         <input type="text" id="editItemName" placeholder="New item name">
         <select id="editItemCategory">
@@ -68,6 +75,11 @@
             <option value="машина">машина</option>
             <option value="холодос">холодос</option>
         </select>
+        <select id="editItemPriority">
+            <option value="1">Низкий</option>
+            <option value="2">Средний</option>
+            <option value="3">Высокий</option>
+        </select>
         <button onclick="saveEditItem()">Save</button>
         <button onclick="closeEditModal()">Cancel</button>
     </div>
@@ -76,7 +88,6 @@
         <button onclick="deleteCheckedItems()">Удалить выбранное</button>
     </div>
 
-    <!-- Navigation buttons -->
     <div class="nav-buttons">
         <button onclick="navigateFilter('left')">Влево</button>
         <button onclick="navigateFilter('right')">Вправо</button>
@@ -84,109 +95,80 @@
 
     <script>
         let currentEditItem = null;
-        let currentFilter = null; // Переменная для хранения текущего фильтра
-        const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null]; // Array of filters
-        let filterIndex = filters.length - 1;; // Start with 'Весь список'
+        let currentFilter = null;
+        const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null];
+        let filterIndex = filters.length - 1;
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadCurrentState(); // Загрузка состояния при загрузке страницы
+            loadCurrentState();
         });
 
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
             const itemCategoryInput = document.getElementById('itemCategory');
+            const itemPriorityInput = document.getElementById('itemPriority');
             const itemName = itemNameInput.value.trim();
-            const itemCategory = currentFilter || itemCategoryInput.value.trim() || 'купить'; // Используем текущий фильтр или значение из поля ввода или "купить" по умолчанию
+            const itemCategory = currentFilter || itemCategoryInput.value.trim() || 'купить';
+            const itemPriority = parseInt(itemPriorityInput.value);
+
             if (!itemName || !itemCategory) return;
 
             fetch('/add', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: itemName,
-                    category: itemCategory
+                    category: itemCategory,
+                    priority: itemPriority
                 }),
             })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 itemNameInput.value = '';
-                itemCategoryInput.value = currentFilter || 'купить'; // Сброс категории к текущему фильтру или "купить" по умолчанию
-                if (currentFilter) {
-                    filterCategory(currentFilter); // Показываем текущий фильтр после добавления элемента
-                } else {
-                    fetchShoppingList(); // Иначе загружаем весь список
-                }
+                itemCategoryInput.value = currentFilter || 'купить';
+                if (currentFilter) filterCategory(currentFilter);
+                else fetchShoppingList();
             })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .catch(error => console.error('There was an error!', error));
         }
 
         function toggleBought(name, checked) {
             fetch('/buy/' + encodeURIComponent(name), {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    bought: checked,
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bought: checked }),
             })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                if (currentFilter) {
-                    filterCategory(currentFilter); // Обновляем текущий фильтр после изменения состояния элемента
-                } else {
-                    fetchShoppingList(); // Иначе загружаем весь список
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
+                if (currentFilter) filterCategory(currentFilter);
+                else fetchShoppingList();
             })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .catch(error => console.error('There was an error!', error));
         }
 
-        function deleteItem(name, listItem) {
+        function deleteItem(name) {
             fetch('/delete/' + encodeURIComponent(name), {
                 method: 'DELETE',
             })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                if (currentFilter) {
-                    filterCategory(currentFilter); // Показываем текущий фильтр после удаления элемента
-                } else {
-                    fetchShoppingList(); // Иначе загружаем весь список
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
+                if (currentFilter) filterCategory(currentFilter);
+                else fetchShoppingList();
             })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .catch(error => console.error('There was an error!', error));
         }
 
         function fetchShoppingList() {
             currentFilter = null;
-            filterIndex = 0; // Reset to 'Весь список'
+            filterIndex = filters.length - 1;
             updateActiveButton(null);
             fetch('/list')
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
             })
-            .then(data => {
-                renderList(data); // После успешного получения данных с сервера, рендерим список
-            })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .then(data => renderList(data))
+            .catch(error => console.error('There was an error!', error));
         }
 
         function renderList(data) {
@@ -194,14 +176,16 @@
             shoppingList.innerHTML = '';
             data.forEach(item => {
                 const li = document.createElement('li');
-                li.className = item.category.replace(/\s+/g, '-'); // Добавляем класс на основе категории
+                li.className = item.category.replace(/\s+/g, '-');
+                li.classList.add(`priority-${item.priority === 1 ? 'low' : item.priority === 2 ? 'medium' : 'high'}`);
+                li.appendChild(document.createTextNode(` [${item.priority === 1 ? 'Низкий' : item.priority === 2 ? 'Средний' : 'Высокий'}] `));
+
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.dataset.name = item.name;
-                checkbox.checked = item.bought; // Устанавливаем состояние чекбокса на основе данных из сервера
+                checkbox.checked = item.bought;
                 checkbox.addEventListener('change', function() {
-                    const checked = this.checked;
-                    toggleBought(item.name, checked); // При изменении состояния чекбокса отправляем запрос на сервер
+                    toggleBought(item.name, this.checked);
                 });
                 li.appendChild(checkbox);
 
@@ -210,12 +194,12 @@
                 if (item.bought) {
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = 'Delete';
-                    deleteButton.onclick = () => deleteItem(item.name, li);
+                    deleteButton.onclick = () => deleteItem(item.name);
                     li.appendChild(deleteButton);
 
                     const editButton = document.createElement('button');
                     editButton.textContent = 'Edit';
-                    editButton.onclick = () => editItem(item.name, item.category);
+                    editButton.onclick = () => editItem(item.name, item.category, item.priority);
                     li.appendChild(editButton);
                 }
 
@@ -226,48 +210,25 @@
         function deleteCheckedItems() {
             if (confirm('Вы уверены, что хотите удалить выбранные элементы?')) {
                 const checkboxes = document.querySelectorAll('#shoppingList input[type="checkbox"]:checked');
-                checkboxes.forEach(checkbox => {
-                    const name = checkbox.dataset.name;
-                    fetch('/delete/' + encodeURIComponent(name), {
-                        method: 'DELETE',
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
-                        // Не загружаем весь список, а обновляем текущий фильтр или весь список в зависимости от текущего состояния
-                        if (currentFilter) {
-                            filterCategory(currentFilter);
-                        } else {
-                            fetchShoppingList();
-                        }
-                    })
-                    .catch(error => {
-                        console.error('There was an error!', error);
-                    });
-                });
+                checkboxes.forEach(checkbox => deleteItem(checkbox.dataset.name));
             }
         }
 
         function filterCategory(category) {
             fetch(`/list?category=${encodeURIComponent(category)}`)
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
             })
             .then(data => {
-                currentFilter = category; // Устанавливаем текущий фильтр
-                filterIndex = filters.indexOf(category); // Update filter index
-                renderList(data); // Рендерим список для выбранной категории
-                updateActiveButton(category); // Обновляем активную кнопку
-                updateAddItemCategory(category); // Обновляем категорию для добавления
-                saveCurrentState(); // Сохраняем текущее состояние
+                currentFilter = category;
+                filterIndex = filters.indexOf(category);
+                renderList(data);
+                updateActiveButton(category);
+                updateAddItemCategory(category);
+                saveCurrentState();
             })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .catch(error => console.error('There was an error!', error));
         }
 
         function updateAddItemCategory(category) {
@@ -277,80 +238,60 @@
         function updateActiveButton(category) {
             const buttons = document.querySelectorAll('.filter-buttons button');
             buttons.forEach(button => button.classList.remove('active'));
-
-            if (category === 'купить') {
-                document.getElementById('buyButton').classList.add('active');
-            } else if (category === 'не-забыть') {
-                document.getElementById('forgetButton').classList.add('active');
-            } else if (category === 'дом') {
-                document.getElementById('homeButton').classList.add('active');
-            } else if (category === 'машина') {
-                document.getElementById('carButton').classList.add('active');
-            } else if (category === 'холодос') {
-                document.getElementById('frigeButton').classList.add('active');    
-            } else {
-                document.getElementById('allButton').classList.add('active');
-            }
+            if (category === 'купить') document.getElementById('buyButton').classList.add('active');
+            else if (category === 'не-забыть') document.getElementById('forgetButton').classList.add('active');
+            else if (category === 'дом') document.getElementById('homeButton').classList.add('active');
+            else if (category === 'машина') document.getElementById('carButton').classList.add('active');
+            else if (category === 'холодос') document.getElementById('frigeButton').classList.add('active');
+            else document.getElementById('allButton').classList.add('active');
         }
 
         function saveCurrentState() {
             localStorage.setItem('currentFilter', currentFilter);
-            localStorage.setItem('filterIndex', filterIndex); // Сохраняем индекс фильтра
+            localStorage.setItem('filterIndex', filterIndex);
         }
 
         function loadCurrentState() {
             const savedFilter = localStorage.getItem('currentFilter');
             const savedFilterIndex = localStorage.getItem('filterIndex');
-
             if (savedFilter && savedFilterIndex !== null) {
-                filterIndex = parseInt(savedFilterIndex, 10); // Восстанавливаем индекс
-                if (savedFilter === "null") {
-                    fetchShoppingList(); // Если "весь список", загружаем его
-                } else {
-                    filterCategory(savedFilter); // Иначе восстанавливаем текущий фильтр
-                }
-            } else {
-                fetchShoppingList();
-            }
+                filterIndex = parseInt(savedFilterIndex, 10);
+                if (savedFilter === "null") fetchShoppingList();
+                else filterCategory(savedFilter);
+            } else fetchShoppingList();
         }
 
-        function editItem(name, category) {
+        function editItem(name, category, priority) {
             currentEditItem = name;
             document.getElementById('editItemName').value = name;
             document.getElementById('editItemCategory').value = category;
+            document.getElementById('editItemPriority').value = priority;
             document.getElementById('editModal').style.display = 'block';
         }
 
         function saveEditItem() {
             const newName = document.getElementById('editItemName').value.trim();
             const newCategory = document.getElementById('editItemCategory').value.trim();
+            const newPriority = parseInt(document.getElementById('editItemPriority').value);
             if (!newName || !newCategory) return;
 
             fetch('/edit/' + encodeURIComponent(currentEditItem), {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newName,
-                    category: newCategory
+                    category: newCategory,
+                    priority: newPriority
                 }),
             })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 currentEditItem = null;
                 document.getElementById('editModal').style.display = 'none';
-                if (currentFilter) {
-                    filterCategory(currentFilter); // Показываем текущий фильтр после редактирования
-                } else {
-                    fetchShoppingList(); // Иначе загружаем весь список
-                }
+                if (currentFilter) filterCategory(currentFilter);
+                else fetchShoppingList();
             })
-            .catch(error => {
-                console.error('There was an error!', error);
-            });
+            .catch(error => console.error('There was an error!', error));
         }
 
         function closeEditModal() {
@@ -359,44 +300,14 @@
         }
 
         function navigateFilter(direction) {
-            const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null]; // Массив фильтров (null для "весь список")
-
-            // Если направление влево
-            if (direction === 'left') {
-                if (filterIndex === filters.length - 1) {
-                    // Если находимся на "весь список", переходим на "холодос"
-                    filterIndex = filters.length - 2; // Индекс "холодос"
-                } else if (filterIndex > 0) {
-                    // Уменьшаем индекс, если он больше 0
-                    filterIndex -= 1; 
-                }
-            } else if (direction === 'right') {
-                if (filterIndex < filters.length - 2) {
-                    // Увеличиваем индекс, если он меньше последнего элемента (исключая "весь список")
-                    filterIndex += 1; 
-                }
-            }
+            if (direction === 'left') filterIndex = filterIndex > 0 ? filterIndex - 1 : filters.length - 1;
+            else if (direction === 'right') filterIndex = filterIndex < filters.length - 1 ? filterIndex + 1 : 0;
 
             const category = filters[filterIndex];
-
-            // Проверяем, достигли конца или начала
-            if (category === null) {
-                // Если это "весь список", вызываем fetchShoppingList
-                fetchShoppingList();
-            } else {
-                // Иначе фильтруем по выбранной категории
-                filterCategory(category);
-            }
-
-            updateActiveButton(category); // Обновляем активную кнопку после навигации
-            saveCurrentState(); // Сохраняем текущее состояние после изменения фильтра
-
-            // Убедимся, что индексы не выходят за границы
-            if (filterIndex < 0) {
-                filterIndex = 0; // Не даем индексам выходить за нижнюю границу
-            } else if (filterIndex >= filters.length) {
-                filterIndex = filters.length - 1; // Не даем индексам выходить за верхнюю границу
-            }
+            if (category === null) fetchShoppingList();
+            else filterCategory(category);
+            updateActiveButton(category);
+            saveCurrentState();
         }
     </script>
 </body>
