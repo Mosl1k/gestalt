@@ -32,6 +32,7 @@ func main() {
 	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
 	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
 	r.HandleFunc("/edit/{name}", editHandler).Methods("PUT")
+	r.HandleFunc("/reorder", reorderHandler).Methods("POST")
 	fmt.Println("Server is running on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
@@ -57,8 +58,18 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	client := getRedisClient()
 	defer client.Close()
 
-	val, err := client.Get(ctx, "shoppingList").Result()
-	if err != nil {
+	category := r.URL.Query().Get("category")
+	if category == "" {
+		http.Error(w, "Category is required", http.StatusBadRequest)
+		return
+	}
+
+	key := "shoppingList:" + category
+	val, err := client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		json.NewEncoder(w).Encode([]Item{})
+		return
+	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -68,17 +79,6 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	category := r.URL.Query().Get("category")
-	if category != "" {
-		var filteredItems []Item
-		for _, item := range items {
-			if item.Category == category {
-				filteredItems = append(filteredItems, item)
-			}
-		}
-		items = filteredItems
 	}
 
 	json.NewEncoder(w).Encode(items)
@@ -93,15 +93,14 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newItem.Category == "" {
-		newItem.Category = "купить"
+		http.Error(w, "Category is required", http.StatusBadRequest)
+		return
 	}
 
-	// Устанавливаем приоритет 2 (средний) по умолчанию, если не указан
 	if newItem.Priority == 0 {
 		newItem.Priority = 2
 	}
 
-	// Ограничиваем приоритет значениями 1-3
 	if newItem.Priority < 1 || newItem.Priority > 3 {
 		newItem.Priority = 2
 	}
@@ -113,7 +112,8 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	val, err := client.Get(ctx, "shoppingList").Result()
+	key := "shoppingList:" + newItem.Category
+	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -137,7 +137,7 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	err = client.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -167,7 +167,8 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	val, err := client.Get(ctx, "shoppingList").Result()
+	key := "shoppingList:" + editedItem.Category
+	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -186,7 +187,6 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		if items[i].Name == oldName {
 			items[i].Name = editedItem.Name
 			items[i].Category = editedItem.Category
-			// Ограничиваем приоритет значениями 1-3
 			if editedItem.Priority >= 1 && editedItem.Priority <= 3 {
 				items[i].Priority = editedItem.Priority
 			}
@@ -200,7 +200,7 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	err = client.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -214,7 +214,8 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 	itemName := vars["name"]
 
 	var item struct {
-		Bought bool `json:"bought"`
+		Bought   bool   `json:"bought"`
+		Category string `json:"category"`
 	}
 	err := json.NewDecoder(r.Body).Decode(&item)
 	if err != nil {
@@ -229,7 +230,8 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	val, err := client.Get(ctx, "shoppingList").Result()
+	key := "shoppingList:" + item.Category
+	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -257,7 +259,7 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	err = client.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -270,6 +272,12 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	itemName := vars["name"]
 
+	category := r.URL.Query().Get("category")
+	if category == "" {
+		http.Error(w, "Category is required", http.StatusBadRequest)
+		return
+	}
+
 	ctx := r.Context()
 	client := getRedisClient()
 	defer client.Close()
@@ -277,7 +285,8 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	val, err := client.Get(ctx, "shoppingList").Result()
+	key := "shoppingList:" + category
+	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -306,7 +315,45 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = client.Set(ctx, "shoppingList", data, 0).Err()
+	err = client.Set(ctx, key, data, 0).Err()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func reorderHandler(w http.ResponseWriter, r *http.Request) {
+	var items []Item
+	err := json.NewDecoder(r.Body).Decode(&items)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if len(items) == 0 {
+		http.Error(w, "No items provided", http.StatusBadRequest)
+		return
+	}
+
+	category := items[0].Category
+	key := "shoppingList:" + category
+
+	ctx := r.Context()
+	client := getRedisClient()
+	defer client.Close()
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = client.Set(ctx, key, data, 0).Err()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -37,6 +37,14 @@
         .priority-low { background-color: #d4edda; }
         .priority-medium { background-color: #fff3cd; }
         .priority-high { background-color: #f8d7da; }
+        #shoppingList li {
+            cursor: move;
+            padding: 5px;
+            margin: 5px 0;
+        }
+        #shoppingList li.dragging {
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
@@ -46,7 +54,6 @@
         <button id="homeButton" onclick="filterCategory('дом')">дом</button>
         <button id="carButton" onclick="filterCategory('машина')">машина</button>
         <button id="frigeButton" onclick="filterCategory('холодос')">холодос</button>
-        <button id="allButton" onclick="fetchShoppingList()">Весь список</button>
     </div>
     <div>
         <input type="text" id="itemName" placeholder="Item name">
@@ -95,20 +102,67 @@
 
     <script>
         let currentEditItem = null;
-        let currentFilter = null;
-        const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос', null];
-        let filterIndex = filters.length - 1;
+        let currentFilter = 'купить'; // Начальная категория
+        const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос'];
+        let filterIndex = 0;
+        let currentItems = [];
 
         document.addEventListener('DOMContentLoaded', function() {
             loadCurrentState();
+            setupDragAndDrop();
         });
+
+        function setupDragAndDrop() {
+            const shoppingList = document.getElementById('shoppingList');
+            shoppingList.addEventListener('dragstart', (e) => {
+                const li = e.target.closest('li');
+                if (li) {
+                    e.dataTransfer.setData('text/plain', li.dataset.index);
+                    li.classList.add('dragging');
+                }
+            });
+
+            shoppingList.addEventListener('dragend', (e) => {
+                const li = e.target.closest('li');
+                if (li) li.classList.remove('dragging');
+            });
+
+            shoppingList.addEventListener('dragover', (e) => e.preventDefault());
+
+            shoppingList.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                const toLi = e.target.closest('li');
+                if (!toLi) return;
+                const toIndex = parseInt(toLi.dataset.index);
+
+                if (fromIndex !== toIndex) {
+                    const [movedItem] = currentItems.splice(fromIndex, 1);
+                    currentItems.splice(toIndex, 0, movedItem);
+                    renderList(currentItems);
+                    saveOrderToServer();
+                }
+            });
+        }
+
+        function saveOrderToServer() {
+            fetch('/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentItems),
+            })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to save order');
+            })
+            .catch(error => console.error('Error saving order:', error));
+        }
 
         function addItem() {
             const itemNameInput = document.getElementById('itemName');
             const itemCategoryInput = document.getElementById('itemCategory');
             const itemPriorityInput = document.getElementById('itemPriority');
             const itemName = itemNameInput.value.trim();
-            const itemCategory = currentFilter || itemCategoryInput.value.trim() || 'купить';
+            const itemCategory = currentFilter || itemCategoryInput.value.trim();
             const itemPriority = parseInt(itemPriorityInput.value);
 
             if (!itemName || !itemCategory) return;
@@ -125,9 +179,8 @@
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 itemNameInput.value = '';
-                itemCategoryInput.value = currentFilter || 'купить';
-                if (currentFilter) filterCategory(currentFilter);
-                else fetchShoppingList();
+                itemCategoryInput.value = currentFilter;
+                filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
         }
@@ -136,46 +189,51 @@
             fetch('/buy/' + encodeURIComponent(name), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bought: checked }),
+                body: JSON.stringify({ bought: checked, category: currentFilter }),
             })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
-                if (currentFilter) filterCategory(currentFilter);
-                else fetchShoppingList();
+                filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
         }
 
         function deleteItem(name) {
-            fetch('/delete/' + encodeURIComponent(name), {
+            fetch(`/delete/${encodeURIComponent(name)}?category=${encodeURIComponent(currentFilter)}`, {
                 method: 'DELETE',
             })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
-                if (currentFilter) filterCategory(currentFilter);
-                else fetchShoppingList();
+                filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
         }
 
-        function fetchShoppingList() {
-            currentFilter = null;
-            filterIndex = filters.length - 1;
-            updateActiveButton(null);
-            fetch('/list')
+        function filterCategory(category) {
+            fetch(`/list?category=${encodeURIComponent(category)}`)
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
             })
-            .then(data => renderList(data))
+            .then(data => {
+                currentFilter = category;
+                filterIndex = filters.indexOf(category);
+                currentItems = data;
+                renderList(data);
+                updateActiveButton(category);
+                updateAddItemCategory(category);
+                saveCurrentState();
+            })
             .catch(error => console.error('There was an error!', error));
         }
 
         function renderList(data) {
             const shoppingList = document.getElementById('shoppingList');
             shoppingList.innerHTML = '';
-            data.forEach(item => {
+            data.forEach((item, index) => {
                 const li = document.createElement('li');
+                li.draggable = true;
+                li.dataset.index = index;
                 li.className = item.category.replace(/\s+/g, '-');
                 li.classList.add(`priority-${item.priority === 1 ? 'low' : item.priority === 2 ? 'medium' : 'high'}`);
                 li.appendChild(document.createTextNode(` [${item.priority === 1 ? 'Низкий' : item.priority === 2 ? 'Средний' : 'Высокий'}] `));
@@ -214,23 +272,6 @@
             }
         }
 
-        function filterCategory(category) {
-            fetch(`/list?category=${encodeURIComponent(category)}`)
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(data => {
-                currentFilter = category;
-                filterIndex = filters.indexOf(category);
-                renderList(data);
-                updateActiveButton(category);
-                updateAddItemCategory(category);
-                saveCurrentState();
-            })
-            .catch(error => console.error('There was an error!', error));
-        }
-
         function updateAddItemCategory(category) {
             document.getElementById('itemCategory').value = category;
         }
@@ -243,7 +284,6 @@
             else if (category === 'дом') document.getElementById('homeButton').classList.add('active');
             else if (category === 'машина') document.getElementById('carButton').classList.add('active');
             else if (category === 'холодос') document.getElementById('frigeButton').classList.add('active');
-            else document.getElementById('allButton').classList.add('active');
         }
 
         function saveCurrentState() {
@@ -256,9 +296,10 @@
             const savedFilterIndex = localStorage.getItem('filterIndex');
             if (savedFilter && savedFilterIndex !== null) {
                 filterIndex = parseInt(savedFilterIndex, 10);
-                if (savedFilter === "null") fetchShoppingList();
-                else filterCategory(savedFilter);
-            } else fetchShoppingList();
+                filterCategory(savedFilter);
+            } else {
+                filterCategory('купить'); // По умолчанию открываем "купить"
+            }
         }
 
         function editItem(name, category, priority) {
@@ -288,8 +329,7 @@
                 if (!response.ok) throw new Error('Network response was not ok');
                 currentEditItem = null;
                 document.getElementById('editModal').style.display = 'none';
-                if (currentFilter) filterCategory(currentFilter);
-                else fetchShoppingList();
+                filterCategory(currentFilter);
             })
             .catch(error => console.error('There was an error!', error));
         }
@@ -304,8 +344,7 @@
             else if (direction === 'right') filterIndex = filterIndex < filters.length - 1 ? filterIndex + 1 : 0;
 
             const category = filters[filterIndex];
-            if (category === null) fetchShoppingList();
-            else filterCategory(category);
+            filterCategory(category);
             updateActiveButton(category);
             saveCurrentState();
         }
