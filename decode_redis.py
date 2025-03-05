@@ -3,26 +3,36 @@ import json
 import os
 from dotenv import load_dotenv
 
+# Загрузка переменных окружения из .env файла
 load_dotenv()
 
 # Получение пароля из переменной окружения
 redis_password = os.getenv('REDIS_PASSWORD')
 
 # Подключение к Redis с использованием пароля
-client = redis.StrictRedis(host='geshtalt.ddns.net', port=6379, password=redis_password, decode_responses=True)
+client = redis.StrictRedis(host='localhost', port=6379, password=redis_password, decode_responses=True)
 
-# Получение данных
-raw_data = client.get('shoppingList')
+# Получение всех ключей с префиксом 'shoppingList:*'
+keys = client.keys('shoppingList:*')
 
-# Проверка, что данные не пустые
-if raw_data:
-    try:
-        # Конвертация строки в JSON-объект
-        shopping_list = json.loads(raw_data)
+# Проверка, есть ли ключи
+if keys:
+    # Проходим по каждому ключу
+    for key in keys:
+        raw_data = client.get(key)  # Получаем значение ключа
         
-        # Вывод данных
-        print(json.dumps(shopping_list, ensure_ascii=False, indent=4))
-    except json.JSONDecodeError as e:
-        print(f"Ошибка при декодировании JSON: {e}")
+        print(f"Ключ: {key}")
+        
+        if raw_data:
+            try:
+                # Пытаемся декодировать как JSON
+                shopping_list = json.loads(raw_data)
+                print(json.dumps(shopping_list, ensure_ascii=False, indent=4))
+            except json.JSONDecodeError:
+                # Если не JSON, выводим как строку
+                print(f"Значение (строка): {raw_data}")
+        else:
+            print("Значение отсутствует.")
+        print("-" * 40)  # Разделитель между ключами
 else:
-    print("Нет данных в ключе 'shoppingList'.")
+    print("Нет ключей с префиксом 'shoppingList:*'.")
