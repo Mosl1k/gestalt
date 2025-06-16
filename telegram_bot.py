@@ -36,11 +36,11 @@ CATEGORIES = list(LISTS.keys())
 
 def encode_callback(data):
     """Кодирует callback_data в base64."""
-    return b64encode(data.encode()).decode()
+    return b64encode(data.encode('utf-8')).decode('utf-8')
 
 def decode_callback(data):
     """Декодирует callback_data из base64."""
-    return b64decode(data.encode()).decode()
+    return b64decode(data).decode('utf-8')
 
 def get_categories_keyboard():
     """Возвращает клавиатуру с категориями."""
@@ -78,7 +78,11 @@ async def add_start(update: Update, context):
     """Обработчик кнопки Добавить. Запрашивает текст элемента."""
     query = update.callback_query
     await query.answer()
-    data = decode_callback(query.data)
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования: {str(e)}")
+        return
     category = data.split(":")[1]
     context.user_data["awaiting_item"] = True
     context.user_data["category"] = category
@@ -110,6 +114,8 @@ async def handle_item_text(update: Update, context):
             await update.message.reply_text(f"Ошибка добавления: {response.status_code} - {response.text}")
             return
 
+        # Логирование для отладки
+        print(f"Добавлен элемент '{item_name}' в категорию '{category}'")
         reply_markup = get_list_keyboard(category)
         await update.message.reply_text(f"Добавлено '{item_name}' в {LISTS[category]}", reply_markup=reply_markup)
     except requests.RequestException as e:
@@ -120,7 +126,12 @@ async def show_item_actions(update: Update, context):
     query = update.callback_query
     await query.answer()
 
-    data = decode_callback(query.data)
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования: {str(e)}")
+        return
+
     if not data.startswith("item:"):
         return
 
@@ -142,7 +153,12 @@ async def handle_item_action(update: Update, context):
     query = update.callback_query
     await query.answer()
 
-    data = decode_callback(query.data)
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования: {str(e)}")
+        return
+
     if not data.startswith("item_action:"):
         return
 
@@ -190,7 +206,12 @@ async def change_category_to(update: Update, context):
     if not context.user_data.get("awaiting_new_category"):
         return
 
-    data = decode_callback(query.data)
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования: {str(e)}")
+        return
+
     if not data.startswith("change_cat_to:"):
         return
 
@@ -246,7 +267,12 @@ async def change_priority_to(update: Update, context):
     if not context.user_data.get("awaiting_priority"):
         return
 
-    data = decode_callback(query.data)
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования: {str(e)}")
+        return
+
     if not data.startswith("pri:"):
         return
 
