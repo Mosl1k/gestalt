@@ -24,12 +24,12 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
-# Списки, соответствующие категориям в main.go
+# Списки, соответствующие ключам в Redis
 LISTS = {
-    "buy": "Купить",
-    "remember": "не забыть",
-    "fridge": "холодос",
-    "cook": "рецепты"
+    "купить": "Список покупок",
+    "не-забыть": "Список не забыть",
+    "холодос": "Список в холодильнике",
+    "дом": "Список для дома"
 }
 
 async def start(update: Update, context):
@@ -68,8 +68,11 @@ async def button_callback(update: Update, context):
             await query.message.reply_text(f"Список '{LISTS[list_type]}' пуст.")
             return
 
-        # Формируем ответ, отображая только имена элементов
-        response = f"{LISTS[list_type]}:\n" + "\n".join([f"- {item['name']}" for item in items])
+        # Формируем ответ, отображая имена и статус покупки
+        response = f"{LISTS[list_type]}:\n" + "\n".join(
+            [f"- {item['name']} ({'куплено' if item['bought'] else 'не куплено'}, приоритет: {item['priority']})" 
+             for item in items]
+        )
         await query.message.reply_text(response)
     except redis.AuthenticationError:
         await query.message.reply_text("Ошибка: неверный пароль для Redis.")
