@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from base64 import b64encode
+from base64 import b64encode, b64decode
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -34,10 +34,18 @@ PRIORITY_EMOJI = {
 # Порядок категорий для переключения
 CATEGORIES = list(LISTS.keys())
 
+def encode_callback(data):
+    """Кодирует callback_data в base64."""
+    return b64encode(data.encode()).decode()
+
+def decode_callback(data):
+    """Декодирует callback_data из base64."""
+    return b64decode(data.encode()).decode()
+
 def get_categories_keyboard():
     """Возвращает клавиатуру с категориями."""
     keyboard = [
-        [InlineKeyboardButton(name, callback_data=f"list:{key}")]
+        [InlineKeyboardButton(name, callback_data=encode_callback(f"list:{key}"))]
         for key, name in LISTS.items()
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -49,12 +57,12 @@ def get_list_keyboard(current_category):
     next_category = CATEGORIES[(current_index + 1) % len(CATEGORIES)]
 
     keyboard = [
-        [InlineKeyboardButton("Назад", callback_data="back")],
+        [InlineKeyboardButton("Назад", callback_data=encode_callback("back"))],
         [
-            InlineKeyboardButton("Предыдущий", callback_data=f"list:{prev_category}"),
-            InlineKeyboardButton("Следующий", callback_data=f"list:{next_category}")
+            InlineKeyboardButton("Предыдущий", callback_data=encode_callback(f"list:{prev_category}")),
+            InlineKeyboardButton("Следующий", callback_data=encode_callback(f"list:{next_category}"))
         ],
-        [InlineKeyboardButton("Добавить", callback_data=f"add:{current_category}")]
+        [InlineKeyboardButton("Добавить", callback_data=encode_callback(f"add:{current_category}"))]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -70,7 +78,7 @@ async def add_start(update: Update, context):
     """Обработчик кнопки Добавить. Запрашивает текст элемента."""
     query = update.callback_query
     await query.answer()
-    data = query.data
+    data = decode_callback(query.data)
     category = data.split(":")[1]
     context.user_data["awaiting_item"] = True
     context.user_data["category"] = category
@@ -99,7 +107,7 @@ async def handle_item_text(update: Update, context):
 
         response = requests.post(f"{API_URL}/add", headers=auth_header, json=data)
         if response.status_code != 201:
-            await update.message.reply_text(f"Ошибка добавления: {response.status_code}")
+            await update.message.reply_text(f"Ошибка добавления: {response.status_code} - {response.text}")
             return
 
         reply_markup = get_list_keyboard(category)
@@ -112,7 +120,7 @@ async def show_item_actions(update: Update, context):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
+    data = decode_callback(query.data)
     if not data.startswith("item:"):
         return
 
@@ -121,9 +129,10 @@ async def show_item_actions(update: Update, context):
     context.user_data["category"] = category
 
     keyboard = [
-        [InlineKeyboardButton("Удалить", callback_data=f"item_action:delete:{item_name}:{category}")],
-        [InlineKeyboardButton("Сменить категорию", callback_data=f"item_action:change_cat:{item_name}:{category}")],
-        [InlineKeyboardButton("Сменить приоритет", callback_data=f"item_action:change_pri:{item_name}:{category}")]
+        [InlineKeyboardButton("Удалить", callback_data=encode_callback(f"item_action:delete:{item_name}:{category}"))],
+        [InlineKeyboardButton("Сменить категорию", callback_data=encode_callback(f"item_action:change_cat:{item_name}:{category}"))],
+        [InlineKeyboardButton("Сменить приоритет", callback_data=encode_callback(f"item_action:change_pri:{item_name}:{category}"))],
+        [InlineKeyboardButton("Назад", callback_data=encode_callback(f"list:{category}"))]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.message.reply_text(f"Что сделать с '{item_name}' в {LISTS[category]}?", reply_markup=reply_markup)
@@ -133,7 +142,7 @@ async def handle_item_action(update: Update, context):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
+    data = decode_callback(query.data)
     if not data.startswith("item_action:"):
         return
 
@@ -148,7 +157,7 @@ async def handle_item_action(update: Update, context):
 
             response = requests.delete(f"{API_URL}/delete/{item_name}?category={category}", headers=auth_header)
             if response.status_code != 200:
-                await query.message.reply_text(f"Ошибка удаления: {response.status_code}")
+                await query.message.reply_text(f"Ошибка удаления: {response.status_code} - {response.text}")
                 return
 
             reply_markup = get_list_keyboard(category)
@@ -158,7 +167,7 @@ async def handle_item_action(update: Update, context):
     elif action == "change_cat":
         context.user_data["awaiting_new_category"] = True
         keyboard = [
-            [InlineKeyboardButton(name, callback_data=f"change_cat_to:{key}")]
+            [InlineKeyboardButton(name, callback_data=encode_callback(f"change_cat_to:{key}"))]
             for key, name in LISTS.items() if key != category
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -166,9 +175,9 @@ async def handle_item_action(update: Update, context):
     elif action == "change_pri":
         context.user_data["awaiting_priority"] = True
         keyboard = [
-            [InlineKeyboardButton("Высокий 🔥", callback_data="pri:3")],
-            [InlineKeyboardButton("Средний 🟡", callback_data="pri:2")],
-            [InlineKeyboardButton("Низкий 🟢", callback_data="pri:1")]
+            [InlineKeyboardButton("Высокий 🔥", callback_data=encode_callback("pri:3"))],
+            [InlineKeyboardButton("Средний 🟡", callback_data=encode_callback("pri:2"))],
+            [InlineKeyboardButton("Низкий 🟢", callback_data=encode_callback("pri:1"))]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.message.reply_text(f"Выберите новый приоритет для '{item_name}' в {LISTS[category]}:", reply_markup=reply_markup)
@@ -181,7 +190,7 @@ async def change_category_to(update: Update, context):
     if not context.user_data.get("awaiting_new_category"):
         return
 
-    data = query.data
+    data = decode_callback(query.data)
     if not data.startswith("change_cat_to:"):
         return
 
@@ -203,7 +212,7 @@ async def change_category_to(update: Update, context):
         # Получаем текущий элемент из старой категории
         response = requests.get(f"{API_URL}/list?category={old_category}", headers=auth_header)
         if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка получения данных: {response.status_code}")
+            await query.message.reply_text(f"Ошибка получения данных: {response.status_code} - {response.text}")
             return
 
         items = response.json()
@@ -221,7 +230,7 @@ async def change_category_to(update: Update, context):
 
         response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={old_category}", headers=auth_header, json=data)
         if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка смены категории: {response.status_code}")
+            await query.message.reply_text(f"Ошибка смены категории: {response.status_code} - {response.text}")
             return
 
         reply_markup = get_list_keyboard(old_category)
@@ -237,7 +246,7 @@ async def change_priority_to(update: Update, context):
     if not context.user_data.get("awaiting_priority"):
         return
 
-    data = query.data
+    data = decode_callback(query.data)
     if not data.startswith("pri:"):
         return
 
@@ -255,7 +264,7 @@ async def change_priority_to(update: Update, context):
         # Получаем текущий элемент
         response = requests.get(f"{API_URL}/list?category={category}", headers=auth_header)
         if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка получения данных: {response.status_code}")
+            await query.message.reply_text(f"Ошибка получения данных: {response.status_code} - {response.text}")
             return
 
         items = response.json()
@@ -273,7 +282,7 @@ async def change_priority_to(update: Update, context):
 
         response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={category}", headers=auth_header, json=data)
         if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка смены приоритета: {response.status_code}")
+            await query.message.reply_text(f"Ошибка смены приоритета: {response.status_code} - {response.text}")
             return
 
         reply_markup = get_list_keyboard(category)
@@ -286,7 +295,12 @@ async def button_callback(update: Update, context):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
+    try:
+        data = decode_callback(query.data)
+    except Exception as e:
+        await query.message.reply_text(f"Ошибка декодирования данных: {str(e)}")
+        return
+
     if data == "back":
         await start(query, context)
         return
@@ -317,7 +331,7 @@ async def button_callback(update: Update, context):
 
             response = requests.get(f"{API_URL}/list?category={list_type}", headers=auth_header)
             if response.status_code != 200:
-                await query.message.reply_text(f"Ошибка API: {response.status_code}")
+                await query.message.reply_text(f"Ошибка API: {response.status_code} - {response.text}")
                 return
 
             items = response.json()
@@ -335,7 +349,7 @@ async def button_callback(update: Update, context):
                 emoji = PRIORITY_EMOJI.get(priority, "🟡")
                 item_text = f"{emoji} {item['name']}"
                 response_text += f"- {item_text}\n"
-                keyboard.append([InlineKeyboardButton(item['name'], callback_data=f"item:{item['name']}:{list_type}")])
+                keyboard.append([InlineKeyboardButton(item['name'], callback_data=encode_callback(f"item:{item['name']}:{list_type}"))])
 
             keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -344,6 +358,8 @@ async def button_callback(update: Update, context):
             await query.message.reply_text(f"Ошибка подключения к API: {e}")
         except json.JSONDecodeError:
             await query.message.reply_text("Ошибка: неверный формат данных от API.")
+        except Exception as e:
+            await query.message.reply_text(f"Произошла ошибка: {str(e)}")
 
 def main():
     """Запуск бота."""
