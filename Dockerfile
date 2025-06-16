@@ -1,13 +1,28 @@
-# Dockerfile
+FROM golang:1.22-alpine AS builder
 
-# Используем образ Golang в качестве базового
-FROM golang:latest
-
-# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем все файлы из текущего каталога в контейнер
+# Копируем go.mod и go.sum первыми для кэширования зависимостей
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Копируем остальной код
 COPY . .
-#EXPOSE 8080
-# Запускаем приложение с помощью команды go run
-CMD ["go", "run", "main.go"]
+
+# Компилируем приложение
+RUN go build -o gestalt ./main.go
+
+# Финальный образ
+FROM alpine:latest
+
+WORKDIR /app
+
+# Копируем скомпилированный бинарник из builder
+COPY --from=builder /app/gestalt .
+
+# Копируем HTML-файл, если он нужен
+COPY index.html .
+
+EXPOSE 8080
+
+CMD ["./gestalt"]
