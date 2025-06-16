@@ -10,10 +10,10 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 load_dotenv()
 
 # Конфигурация из .env
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  
-API_URL = os.getenv("API_URL", "http://gestalt:8080") 
-USERNAME = os.getenv("USERNAME")  
-PASSWORD = os.getenv("PASSWORD") 
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # TELEGRAM_TOKEN=your_bot_token
+API_URL = os.getenv("API_URL", "http://gestalt:8080")  # API_URL=http://gestalt:8080
+USERNAME = os.getenv("USERNAME")  # USERNAME=your_username
+PASSWORD = os.getenv("PASSWORD")  # PASSWORD=your_password
 
 # Категории для списков
 LISTS = {
@@ -23,30 +23,23 @@ LISTS = {
     "дом": "Дом"
 }
 
-async def start(update: Update, context):
-    """Обработчик команды /start. Показывает кнопки для выбора списков и Меню."""
+def get_main_keyboard():
+    """Возвращает основную клавиатуру с категориями, Добавить и Рестарт."""
     keyboard = [
         [InlineKeyboardButton(name, callback_data=f"list:{key}")]
         for key, name in LISTS.items()
     ]
-    keyboard.append([InlineKeyboardButton("Меню", callback_data="menu")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard.append([InlineKeyboardButton("Добавить", callback_data="add")])
+    keyboard.append([InlineKeyboardButton("Рестарт", callback_data="restart")])
+    return InlineKeyboardMarkup(keyboard)
+
+async def start(update: Update, context):
+    """Обработчик команды /start. Показывает основную клавиатуру."""
+    reply_markup = get_main_keyboard()
     if isinstance(update, Update) and update.message:
         await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
     else:
         await update.edit_message_text("Выберите категорию:", reply_markup=reply_markup)
-
-async def menu(update: Update, context):
-    """Обработчик кнопки Меню."""
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("Добавить", callback_data="add")],
-        [InlineKeyboardButton("Старт", callback_data="start")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.edit_text("Меню:", reply_markup=reply_markup)
 
 async def add_start(update: Update, context):
     """Обработчик кнопки Добавить. Запрашивает текст элемента."""
@@ -112,7 +105,8 @@ async def add_to_category(update: Update, context):
             await query.message.reply_text(f"Ошибка добавления: {response.status_code}")
             return
 
-        await query.message.reply_text(f"Добавлено '{item_name}' в {LISTS[category]}")
+        reply_markup = get_main_keyboard()
+        await query.message.reply_text(f"Добавлено '{item_name}' в {LISTS[category]}", reply_markup=reply_markup)
     except requests.RequestException as e:
         await query.message.reply_text(f"Ошибка подключения к API: {e}")
 
@@ -122,11 +116,11 @@ async def button_callback(update: Update, context):
     await query.answer()
 
     data = query.data
-    if data == "menu":
-        await menu(update, context)
-        return
-    if data == "start":
+    if data == "restart":
         await start(query, context)
+        return
+    if data == "add":
+        await add_start(update, context)
         return
     if data.startswith("add_to:"):
         await add_to_category(update, context)
@@ -150,12 +144,12 @@ async def button_callback(update: Update, context):
 
             items = response.json()
             if not items:
-                await query.message.reply_text(f"{LISTS[list_type]} пуст.")
-                return
+                response_text = f"{LISTS[list_type]} пуст."
+            else:
+                response_text = f"{LISTS[list_type]}:\n" + "\n".join([f"- {item['name']}" for item in items])
 
-            # Формируем ответ, отображая только имена
-            response_text = f"{LISTS[list_type]}:\n" + "\n".join([f"- {item['name']}" for item in items])
-            await query.message.reply_text(response_text)
+            reply_markup = get_main_keyboard()
+            await query.message.reply_text(response_text, reply_markup=reply_markup)
         except requests.RequestException as e:
             await query.message.reply_text(f"Ошибка подключения к API: {e}")
         except json.JSONDecodeError:
