@@ -1,4 +1,5 @@
 .env
 key.pem
 cert.pem
+certbot
 kompose
