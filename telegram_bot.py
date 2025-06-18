@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+from base64 import b64encode
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
