@@ -58,12 +58,12 @@ def get_list_keyboard(current_category):
     next_category = CATEGORIES[(current_index + 1) % len(CATEGORIES)]
 
     keyboard = [
-        [InlineKeyboardButton("Назад", callback_data="restart")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="restart")],
         [
-            InlineKeyboardButton("Предыдущий", callback_data=f"list:{prev_category}"),
-            InlineKeyboardButton("Следующий", callback_data=f"list:{next_category}")
+            InlineKeyboardButton("⬅️ Предыдущий", callback_data=f"list:{prev_category}"),
+            InlineKeyboardButton("Следующий ➡️", callback_data=f"list:{next_category}")
         ],
-        [InlineKeyboardButton("Добавить", callback_data=f"add:{current_category}")]
+        [InlineKeyboardButton("➕ Добавить", callback_data=f"add:{current_category}")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -420,8 +420,12 @@ async def button_callback(update: Update, context):
                 if len(callback_data.encode('utf-8')) > 64:
                     logging.error(f"Callback data too long for item: {item['name']} in category: {list_type}")
                     continue
-                keyboard.append([InlineKeyboardButton(item['name'], callback_data=callback_data)])
+                keyboard.append([InlineKeyboardButton(f"{emoji} {item['name']}", callback_data=callback_data)])
 
+            # Добавляем пустую строку (визуальный разделитель)
+            keyboard.append([])
+
+            # Добавляем управляющие кнопки
             keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.message.reply_text(response_text, reply_markup=reply_markup)
