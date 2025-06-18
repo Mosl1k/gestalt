@@ -5,6 +5,14 @@ from base64 import b64encode
 from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    filename='bot.log',
+    level=logging.ERROR,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Загружаем переменные из .env
 load_dotenv()
@@ -35,15 +43,11 @@ PRIORITY_EMOJI = {
 CATEGORIES = list(LISTS.keys())
 
 def get_main_keyboard():
-    """Возвращает основную клавиатуру с категориями и действиями."""
+    """Возвращает основную клавиатуру с категориями."""
     keyboard = [
         [InlineKeyboardButton(name, callback_data=f"list:{key}")]
         for key, name in LISTS.items()
     ]
-    keyboard.append([InlineKeyboardButton("Добавить", callback_data="add")])
-    keyboard.append([InlineKeyboardButton("Удалить", callback_data="delete")])
-    keyboard.append([InlineKeyboardButton("Сменить категорию", callback_data="change_category")])
-    keyboard.append([InlineKeyboardButton("Сменить приоритет", callback_data="change_priority")])
     keyboard.append([InlineKeyboardButton("Рестарт", callback_data="restart")])
     return InlineKeyboardMarkup(keyboard)
 
@@ -67,9 +71,9 @@ async def start(update: Update, context):
     """Обработчик команды /start. Показывает основную клавиатуру."""
     reply_markup = get_main_keyboard()
     if isinstance(update, Update) and update.message:
-        await update.message.reply_text("Выберите категорию или действие:", reply_markup=reply_markup)
+        await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
     else:
-        await update.callback_query.message.edit_text("Выберите категорию или действие:", reply_markup=reply_markup)
+        await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
 
 async def add_start(update: Update, context):
     """Обработчик кнопки Добавить. Запрашивает текст элемента."""
@@ -80,7 +84,7 @@ async def add_start(update: Update, context):
     context.user_data["awaiting_item"] = True
     context.user_data["category"] = category
     await query.message.reply_text(
-        f"Введите название элемента для добавления{' в ' + LISTS[category] if category else ''}:"
+        f"Введите название элемента для добавления в {LISTS[category]}:"
     )
 
 async def handle_item_text(update: Update, context):
@@ -89,51 +93,19 @@ async def handle_item_text(update: Update, context):
         return
 
     item_name = update.message.text
-    action = context.user_data.get("action")
+    context.user_data["item_name"] = item_name
+    context.user_data["awaiting_item"] = False
 
-    if action == "delete":
-        context.user_data["item_name"] = item_name
-        context.user_data["awaiting_item"] = False
-        context.user_data["awaiting_category"] = True
-        keyboard = [
-            [InlineKeyboardButton(name, callback_data=f"delete_from:{key}")]
-            for key, name in LISTS.items()
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(f"Из какой категории удалить '{item_name}'?", reply_markup=reply_markup)
-    elif action == "change_category":
-        context.user_data["item_name"] = item_name
-        context.user_data["awaiting_item"] = False
-        context.user_data["awaiting_old_category"] = True
-        keyboard = [
-            [InlineKeyboardButton(name, callback_data=f"change_cat_from:{key}")]
-            for key, name in LISTS.items()
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(f"Из какой категории перенести '{item_name}'?", reply_markup=reply_markup)
-    elif action == "change_priority":
-        context.user_data["item_name"] = item_name
-        context.user_data["awaiting_item"] = False
-        context.user_data["awaiting_category"] = True
-        keyboard = [
-            [InlineKeyboardButton(name, callback_data=f"change_pri_from:{key}")]
-            for key, name in LISTS.items()
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(f"В какой категории изменить приоритет для '{item_name}'?", reply_markup=reply_markup)
+    if context.user_data.get("category"):
+        await add_to_category(update, context)
     else:
-        context.user_data["item_name"] = item_name
-        context.user_data["awaiting_item"] = False
-        if context.user_data.get("category"):
-            await add_to_category(update, context)
-        else:
-            context.user_data["awaiting_category"] = True
-            keyboard = [
-                [InlineKeyboardButton(name, callback_data=f"add_to:{key}")]
-                for key, name in LISTS.items()
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(f"Куда добавить '{item_name}'?", reply_markup=reply_markup)
+        context.user_data["awaiting_category"] = True
+        keyboard = [
+            [InlineKeyboardButton(name, callback_data=f"add_to:{key}")]
+            for key, name in LISTS.items()
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(f"Куда добавить '{item_name}'?", reply_markup=reply_markup)
 
 async def add_to_category(update: Update, context):
     """Обработчик выбора категории для добавления."""
@@ -168,244 +140,21 @@ async def add_to_category(update: Update, context):
 
         response = requests.post(f"{API_URL}/add", headers=auth_header, json=data)
         if response.status_code != 201:
-            await update.message.reply_text(f"Ошибка добавления: {response.status_code} - {response.text}")
+            error_msg = f"Ошибка добавления: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await update.message.reply_text(error_msg)
             return
 
         reply_markup = get_list_keyboard(category)
         await update.message.reply_text(f"Добавлено '{item_name}' в {LISTS[category]}", reply_markup=reply_markup)
     except requests.RequestException as e:
-        await update.message.reply_text(f"Ошибка подключения к API: {e}")
+        error_msg = f"Ошибка подключения к API: {e}"
+        logging.error(error_msg)
+        await update.message.reply_text(error_msg)
     except Exception as e:
-        await update.message.reply_text(f"Произошла ошибка: {str(e)}")
-
-async def delete_start(update: Update, context):
-    """Обработчик кнопки Удалить. Запрашивает текст элемента."""
-    query = update.callback_query
-    await query.answer()
-    context.user_data["awaiting_item"] = True
-    context.user_data["action"] = "delete"
-    await query.message.reply_text("Введите название элемента для удаления:")
-
-async def delete_from_category(update: Update, context):
-    """Обработчик выбора категории для удаления."""
-    query = update.callback_query
-    await query.answer()
-
-    if not context.user_data.get("awaiting_category"):
-        return
-
-    data = query.data
-    if not data.startswith("delete_from:"):
-        return
-
-    category = data.split(":")[1]
-    if category not in LISTS:
-        await query.message.reply_text(f"Неизвестная категория: {category}")
-        return
-
-    item_name = context.user_data.get("item_name")
-    context.user_data["awaiting_category"] = False
-    context.user_data.pop("item_name", None)
-    context.user_data.pop("action", None)
-
-    try:
-        auth_str = f"{USERNAME}:{PASSWORD}"
-        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}"}
-
-        response = requests.delete(f"{API_URL}/delete/{item_name}?category={category}", headers=auth_header)
-        if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка удаления: {response.status_code} - {response.text}")
-            return
-
-        reply_markup = get_list_keyboard(category)
-        await query.message.reply_text(f"Удалено '{item_name}' из {LISTS[category]}", reply_markup=reply_markup)
-    except requests.RequestException as e:
-        await query.message.reply_text(f"Ошибка подключения к API: {e}")
-    except Exception as e:
-        await query.message.reply_text(f"Произошла ошибка: {str(e)}")
-
-async def change_category_start(update: Update, context):
-    """Обработчик кнопки Сменить категорию. Запрашивает текст элемента."""
-    query = update.callback_query
-    await query.answer()
-    context.user_data["awaiting_item"] = True
-    context.user_data["action"] = "change_category"
-    await query.message.reply_text("Введите название элемента для смены категории:")
-
-async def change_category_from(update: Update, context):
-    """Обработчик выбора старой категории для смены категории."""
-    query = update.callback_query
-    await query.answer()
-
-    if not context.user_data.get("awaiting_old_category"):
-        return
-
-    data = query.data
-    if not data.startswith("change_cat_from:"):
-        return
-
-    old_category = data.split(":")[1]
-    if old_category not in LISTS:
-        await query.message.reply_text(f"Неизвестная категория: {old_category}")
-        return
-
-    context.user_data["old_category"] = old_category
-    context.user_data["awaiting_old_category"] = False
-    context.user_data["awaiting_new_category"] = True
-
-    keyboard = [
-        [InlineKeyboardButton(name, callback_data=f"change_cat_to:{key}")]
-        for key, name in LISTS.items() if key != old_category
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.reply_text(f"В какую категорию перенести '{context.user_data['item_name']}'?", reply_markup=reply_markup)
-
-async def change_category_to(update: Update, context):
-    """Обработчик выбора новой категории."""
-    query = update.callback_query
-    await query.answer()
-
-    if not context.user_data.get("awaiting_new_category"):
-        return
-
-    data = query.data
-    if not data.startswith("change_cat_to:"):
-        return
-
-    new_category = data.split(":")[1]
-    if new_category not in LISTS:
-        await query.message.reply_text(f"Неизвестная категория: {new_category}")
-        return
-
-    item_name = context.user_data.get("item_name")
-    old_category = context.user_data.get("old_category")
-    context.user_data["awaiting_new_category"] = False
-    context.user_data.pop("item_name", None)
-    context.user_data.pop("old_category", None)
-
-    try:
-        auth_str = f"{USERNAME}:{PASSWORD}"
-        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}", "Content-Type": "application/json"}
-
-        response = requests.get(f"{API_URL}/list?category={old_category}", headers=auth_header)
-        if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка получения данных: {response.status_code} - {response.text}")
-            return
-
-        items = response.json()
-        item = next((i for i in items if i["name"] == item_name), None)
-        if not item:
-            await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[old_category]}")
-            return
-
-        data = {
-            "name": item_name,
-            "category": new_category,
-            "bought": item["bought"],
-            "priority": item["priority"]
-        }
-
-        response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={old_category}", headers=auth_header, json=data)
-        if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка смены категории: {response.status_code} - {response.text}")
-            return
-
-        reply_markup = get_list_keyboard(new_category)
-        await query.message.reply_text(f"Элемент '{item_name}' перенесен из {LISTS[old_category]} в {LISTS[new_category]}", reply_markup=reply_markup)
-    except requests.RequestException as e:
-        await query.message.reply_text(f"Ошибка подключения к API: {e}")
-    except Exception as e:
-        await query.message.reply_text(f"Произошла ошибка: {str(e)}")
-
-async def change_priority_start(update: Update, context):
-    """Обработчик кнопки Сменить приоритет. Запрашивает текст элемента."""
-    query = update.callback_query
-    await query.answer()
-    context.user_data["awaiting_item"] = True
-    context.user_data["action"] = "change_priority"
-    await query.message.reply_text("Введите название элемента для смены приоритета:")
-
-async def change_priority_from(update: Update, context):
-    """Обработчик выбора категории для смены приоритета."""
-    query = update.callback_query
-    await query.answer()
-
-    if not context.user_data.get("awaiting_category"):
-        return
-
-    data = query.data
-    if not data.startswith("change_pri_from:"):
-        return
-
-    category = data.split(":")[1]
-    if category not in LISTS:
-        await query.message.reply_text(f"Неизвестная категория: {category}")
-        return
-
-    context.user_data["category"] = category
-    context.user_data["awaiting_category"] = False
-    context.user_data["awaiting_priority"] = True
-
-    keyboard = [
-        [InlineKeyboardButton(f"Высокий {PRIORITY_EMOJI[3]}", callback_data="pri:3")],
-        [InlineKeyboardButton(f"Средний {PRIORITY_EMOJI[2]}", callback_data="pri:2")],
-        [InlineKeyboardButton(f"Низкий {PRIORITY_EMOJI[1]}", callback_data="pri:1")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.message.reply_text(f"Выберите новый приоритет для '{context.user_data['item_name']}' в {LISTS[category]}:", reply_markup=reply_markup)
-
-async def change_priority_to(update: Update, context):
-    """Обработчик выбора нового приоритета."""
-    query = update.callback_query
-    await query.answer()
-
-    if not context.user_data.get("awaiting_priority"):
-        return
-
-    data = query.data
-    if not data.startswith("pri:"):
-        return
-
-    new_priority = int(data.split(":")[1])
-    item_name = context.user_data.get("item_name")
-    category = context.user_data.get("category")
-    context.user_data["awaiting_priority"] = False
-    context.user_data.pop("item_name", None)
-    context.user_data.pop("category", None)
-
-    try:
-        auth_str = f"{USERNAME}:{PASSWORD}"
-        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}", "Content-Type": "application/json"}
-
-        response = requests.get(f"{API_URL}/list?category={category}", headers=auth_header)
-        if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка получения данных: {response.status_code} - {response.text}")
-            return
-
-        items = response.json()
-        item = next((i for i in items if i["name"] == item_name), None)
-        if not item:
-            await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[category]}")
-            return
-
-        data = {
-            "name": item_name,
-            "category": category,
-            "bought": item["bought"],
-            "priority": new_priority
-        }
-
-        response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={category}", headers=auth_header, json=data)
-        if response.status_code != 200:
-            await query.message.reply_text(f"Ошибка смены приоритета: {response.status_code} - {response.text}")
-            return
-
-        reply_markup = get_list_keyboard(category)
-        await query.message.reply_text(f"Приоритет для '{item_name}' в {LISTS[category]} изменен на {PRIORITY_EMOJI[new_priority]}", reply_markup=reply_markup)
-    except requests.RequestException as e:
-        await query.message.reply_text(f"Ошибка подключения к API: {e}")
-    except Exception as e:
-        await query.message.reply_text(f"Произошла ошибка: {str(e)}")
+        error_msg = f"Произошла ошибка: {str(e)}"
+        logging.error(error_msg)
+        await update.message.reply_text(error_msg)
 
 async def show_item_actions(update: Update, context):
     """Показывает действия для выбранного элемента."""
@@ -449,15 +198,21 @@ async def handle_item_action(update: Update, context):
 
             response = requests.delete(f"{API_URL}/delete/{item_name}?category={category}", headers=auth_header)
             if response.status_code != 200:
-                await query.message.reply_text(f"Ошибка удаления: {response.status_code} - {response.text}")
+                error_msg = f"Ошибка удаления: {response.status_code} - {response.text}"
+                logging.error(error_msg)
+                await query.message.reply_text(error_msg)
                 return
 
             reply_markup = get_list_keyboard(category)
             await query.message.reply_text(f"Удалено '{item_name}' из {LISTS[category]}", reply_markup=reply_markup)
         except requests.RequestException as e:
-            await query.message.reply_text(f"Ошибка подключения к API: {e}")
+            error_msg = f"Ошибка подключения к API: {e}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
         except Exception as e:
-            await query.message.reply_text(f"Произошла ошибка: {str(e)}")
+            error_msg = f"Произошла ошибка: {str(e)}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
     elif action == "change_cat":
         context.user_data["awaiting_new_category"] = True
         keyboard = [
@@ -476,6 +231,132 @@ async def handle_item_action(update: Update, context):
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.message.reply_text(f"Выберите новый приоритет для '{item_name}' в {LISTS[category]}:", reply_markup=reply_markup)
 
+async def change_category_to(update: Update, context):
+    """Обработчик выбора новой категории."""
+    query = update.callback_query
+    await query.answer()
+
+    if not context.user_data.get("awaiting_new_category"):
+        return
+
+    data = query.data
+    if not data.startswith("change_cat_to:"):
+        return
+
+    new_category = data.split(":")[1]
+    if new_category not in LISTS:
+        await query.message.reply_text(f"Неизвестная категория: {new_category}")
+        return
+
+    item_name = context.user_data.get("item_name")
+    old_category = context.user_data.get("category")
+    context.user_data["awaiting_new_category"] = False
+    context.user_data.pop("item_name", None)
+    context.user_data.pop("category", None)
+
+    try:
+        auth_str = f"{USERNAME}:{PASSWORD}"
+        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}", "Content-Type": "application/json"}
+
+        response = requests.get(f"{API_URL}/list?category={old_category}", headers=auth_header)
+        if response.status_code != 200:
+            error_msg = f"Ошибка получения данных: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
+            return
+
+        items = response.json()
+        item = next((i for i in items if i["name"] == item_name), None)
+        if not item:
+            await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[old_category]}")
+            return
+
+        data = {
+            "name": item_name,
+            "category": new_category,
+            "bought": item["bought"],
+            "priority": item["priority"]
+        }
+
+        response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={old_category}", headers=auth_header, json=data)
+        if response.status_code != 200:
+            error_msg = f"Ошибка смены категории: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
+            return
+
+        reply_markup = get_list_keyboard(new_category)
+        await query.message.reply_text(f"Элемент '{item_name}' перенесен из {LISTS[old_category]} в {LISTS[new_category]}", reply_markup=reply_markup)
+    except requests.RequestException as e:
+        error_msg = f"Ошибка подключения к API: {e}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg)
+    except Exception as e:
+        error_msg = f"Произошла ошибка: {str(e)}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg)
+
+async def change_priority_to(update: Update, context):
+    """Обработчик выбора нового приоритета."""
+    query = update.callback_query
+    await query.answer()
+
+    if not context.user_data.get("awaiting_priority"):
+        return
+
+    data = query.data
+    if not data.startswith("pri:"):
+        return
+
+    new_priority = int(data.split(":")[1])
+    item_name = context.user_data.get("item_name")
+    category = context.user_data.get("category")
+    context.user_data["awaiting_priority"] = False
+    context.user_data.pop("item_name", None)
+    context.user_data.pop("category", None)
+
+    try:
+        auth_str = f"{USERNAME}:{PASSWORD}"
+        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}", "Content-Type": "application/json"}
+
+        response = requests.get(f"{API_URL}/list?category={category}", headers=auth_header)
+        if response.status_code != 200:
+            error_msg = f"Ошибка получения данных: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
+            return
+
+        items = response.json()
+        item = next((i for i in items if i["name"] == item_name), None)
+        if not item:
+            await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[category]}")
+            return
+
+        data = {
+            "name": item_name,
+            "category": category,
+            "bought": item["bought"],
+            "priority": new_priority
+        }
+
+        response = requests.put(f"{API_URL}/edit/{item_name}?oldCategory={category}", headers=auth_header, json=data)
+        if response.status_code != 200:
+            error_msg = f"Ошибка смены приоритета: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
+            return
+
+        reply_markup = get_list_keyboard(category)
+        await query.message.reply_text(f"Приоритет для '{item_name}' в {LISTS[category]} изменен на {PRIORITY_EMOJI[new_priority]}", reply_markup=reply_markup)
+    except requests.RequestException as e:
+        error_msg = f"Ошибка подключения к API: {e}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg)
+    except Exception as e:
+        error_msg = f"Произошла ошибка: {str(e)}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg)
+
 async def button_callback(update: Update, context):
     """Обработчик нажатий на кнопки."""
     query = update.callback_query
@@ -485,41 +366,23 @@ async def button_callback(update: Update, context):
     if data == "restart":
         await start(update, context)
         return
-    if data == "add":
+    if data.startswith("add"):
         await add_start(update, context)
-        return
-    if data == "delete":
-        await delete_start(update, context)
-        return
-    if data == "change_category":
-        await change_category_start(update, context)
-        return
-    if data == "change_priority":
-        await change_priority_start(update, context)
         return
     if data.startswith("add_to:"):
         await add_to_category(update, context)
-        return
-    if data.startswith("delete_from:"):
-        await delete_from_category(update, context)
-        return
-    if data.startswith("change_cat_from:"):
-        await change_category_from(update, context)
-        return
-    if data.startswith("change_cat_to:"):
-        await change_category_to(update, context)
-        return
-    if data.startswith("change_pri_from:"):
-        await change_priority_from(update, context)
-        return
-    if data.startswith("pri:"):
-        await change_priority_to(update, context)
         return
     if data.startswith("item:"):
         await show_item_actions(update, context)
         return
     if data.startswith("item_action:"):
         await handle_item_action(update, context)
+        return
+    if data.startswith("change_cat_to:"):
+        await change_category_to(update, context)
+        return
+    if data.startswith("pri:"):
+        await change_priority_to(update, context)
         return
     if data.startswith("list:"):
         list_type = data.split(":")[1]
@@ -533,7 +396,9 @@ async def button_callback(update: Update, context):
 
             response = requests.get(f"{API_URL}/list?category={list_type}", headers=auth_header)
             if response.status_code != 200:
-                await query.message.reply_text(f"Ошибка API: {response.status_code} - {response.text}")
+                error_msg = f"Ошибка API: {response.status_code} - {response.text}"
+                logging.error(error_msg)
+                await query.message.reply_text(error_msg)
                 return
 
             items = response.json()
@@ -549,27 +414,42 @@ async def button_callback(update: Update, context):
                 priority = item["priority"]
                 emoji = PRIORITY_EMOJI.get(priority, "🟡")
                 response_text += f"- {emoji} {item['name']}\n"
-                keyboard.append([InlineKeyboardButton(item['name'], callback_data=f"item:{item['name']}:{list_type}")])
+                max_name_length = 50
+                safe_name = item['name'][:max_name_length].encode('utf-8').decode('utf-8', 'ignore')
+                callback_data = f"item:{safe_name}:{list_type}"
+                if len(callback_data.encode('utf-8')) > 64:
+                    logging.error(f"Callback data too long for item: {item['name']} in category: {list_type}")
+                    continue
+                keyboard.append([InlineKeyboardButton(item['name'], callback_data=callback_data)])
 
             keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.message.reply_text(response_text, reply_markup=reply_markup)
         except requests.RequestException as e:
-            await query.message.reply_text(f"Ошибка подключения к API: {e}")
+            error_msg = f"Ошибка подключения к API: {e}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
         except json.JSONDecodeError:
-            await query.message.reply_text("Ошибка: неверный формат данных от API.")
+            error_msg = "Ошибка: неверный формат данных от API."
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
         except Exception as e:
-            await query.message.reply_text(f"Произошла ошибка: {str(e)}")
+            error_msg = f"Произошла ошибка: {str(e)}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
 
 def main():
     """Запуск бота."""
     if not TELEGRAM_TOKEN:
+        logging.error("Ошибка: TELEGRAM_TOKEN не указан в .env")
         print("Ошибка: TELEGRAM_TOKEN не указан в .env")
         return
     if not USERNAME or not PASSWORD:
+        logging.error("Ошибка: USERNAME или PASSWORD не указаны в .env")
         print("Ошибка: USERNAME или PASSWORD не указаны в .env")
         return
     if not API_URL:
+        logging.error("Ошибка: API_URL не указан в .env")
         print("Ошибка: API_URL не указан в .env")
         return
 
