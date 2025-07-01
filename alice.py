@@ -22,6 +22,8 @@ AUTH_HEADER = {
 }
 
 def add_to_shopping_list(item_name, category):
+    if not item_name.strip():  # Проверка на пустую строку
+        return {"error": "Item name cannot be empty"}
     url = f'{BASE_URL}/add'
     payload = {
         "name": item_name,
@@ -36,8 +38,7 @@ def get_list_by_category(category):
     if response.status_code == 200:
         data = response.json()
         print(f"Полученные данные для категории '{category}': {data}")
-        # Фильтруем элементы по категории (на случай, если сервер не делает это сам)
-        filtered_items = [item['name'] for item in data if item.get('category', '').lower() == category.lower()]
+        filtered_items = [item['name'] for item in data if item.get('category', '').lower() == category.lower() and item['name'].strip()]
         print(f"Элементы в категории '{category}': {filtered_items}")
         return filtered_items
     else:
@@ -55,20 +56,28 @@ def webhook():
         response_text = "Привет, что нужно сделать?"
     elif command.startswith('запиши') or command.startswith('записать'):
         item_to_record = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'не забыть': '{item_to_record}'")
-        
-        api_response = add_to_shopping_list(item_to_record, 'не-забыть')
-        print("API response:", api_response)
-        
-        response_text = f"Записано в список 'не забыть': '{item_to_record}'"
+        if not item_to_record.strip():
+            response_text = "Пожалуйста, укажите, что нужно записать. Например: 'Запиши молоко'."
+        else:
+            print(f"Записано в список 'не-забыть': '{item_to_record}'")
+            api_response = add_to_shopping_list(item_to_record, 'не-забыть')
+            print("API response:", api_response)
+            if 'error' in api_response:
+                response_text = "Ошибка: не удалось добавить пустую запись."
+            else:
+                response_text = f"Записано в список 'не-забыть': '{item_to_record}'"
     elif command.startswith('купить'):
         item_to_buy = ' '.join(data['request']['nlu']['tokens'][1:])
-        print(f"Записано в список 'купить': '{item_to_buy}'")
-        
-        api_response = add_to_shopping_list(item_to_buy, 'купить')
-        print("API response:", api_response)
-        
-        response_text = f"Записано в список 'купить': '{item_to_buy}'"
+        if not item_to_buy.strip():
+            response_text = "Пожалуйста, укажите, что нужно купить. Например: 'Купить хлеб'."
+        else:
+            print(f"Записано в список 'купить': '{item_to_buy}'")
+            api_response = add_to_shopping_list(item_to_buy, 'купить')
+            print("API response:", api_response)
+            if 'error' in api_response:
+                response_text = "Ошибка: не удалось добавить пустую запись."
+            else:
+                response_text = f"Записано в список 'купить': '{item_to_buy}'"
     elif command == 'что купить':
         items_to_buy = get_list_by_category('купить')
         if items_to_buy:
@@ -78,9 +87,9 @@ def webhook():
     elif command == 'что не забыть':
         items_to_remember = get_list_by_category('не-забыть')
         if items_to_remember:
-            response_text = "В списке 'не забыть': " + ', '.join(items_to_remember)
+            response_text = "В списке 'не-забыть': " + ', '.join(items_to_remember)
         else:
-            response_text = "Список 'не забыть' пуст."
+            response_text = "Список 'не-забыть' пуст."
     elif command == 'что в холодильнике':
         items_in_fridge = get_list_by_category('холодос')
         if items_in_fridge:
