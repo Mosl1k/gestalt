@@ -17,7 +17,7 @@ services:
   geshtalt:
     build:
       context: .
-      dockerfile: Dockerfile  # Dockerfile для Golang
+      dockerfile: Dockerfile
     container_name: geshtalt
     environment:
       - REDIS_ADDR=redis:6379
@@ -31,7 +31,7 @@ services:
   alice:
     build:
       context: .
-      dockerfile: Dockerfile.python  # Dockerfile для Python
+      dockerfile: Dockerfile.python
     container_name: alice
     env_file:
       - .env
@@ -54,21 +54,22 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+    restart: always
 
- 
-  # nginx:
-  #   image: nginx:latest
-  #   container_name: nginx
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx.conf:/etc/nginx/nginx.conf
-  #     - ./certbot/conf:/etc/letsencrypt
-  #     - ./certbot/www:/var/www/certbot
-  #   depends_on:
-  #     - web
-  #   restart: always
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+      - ./yandex_2643153d86de9bb9.html:/var/www/html/yandex_2643153d86de9bb9.html
+    depends_on:
+      - geshtalt
+    restart: always
 
   # certbot:
   #   image: certbot/certbot
