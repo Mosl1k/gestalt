@@ -1,7 +1,7 @@
 .env
 key.pem
 cert.pem
-certbot
+certbot/*
 kompose
 del.py
 regru
