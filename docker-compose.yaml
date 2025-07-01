@@ -1,4 +1,3 @@
-
 services:
   redis:
     image: redis:latest
@@ -37,6 +36,8 @@ services:
       - .env
     ports:
       - "2112:2112"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
       - redis
       - geshtalt
