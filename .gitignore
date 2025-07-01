@@ -2,8 +2,10 @@
 key.pem
 cert.pem
 certbot/*
-kompose
+no_need/del.py
+no_need/decode_redis.py
 del.py
+kompose
 regru
 backup_redis.sh
 get.py
