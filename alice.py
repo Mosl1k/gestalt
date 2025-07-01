@@ -123,5 +123,5 @@ def webhook():
     return jsonify(response)
 
 if __name__ == '__main__':
-    context = ('cert.pem', 'key.pem')
+    context = ('/etc/letsencrypt/live/kpalch.ru/fullchain.pem', '/etc/letsencrypt/live/kpalch.ru/privkey.pem')
     app.run(host='0.0.0.0', port=2112, ssl_context=context)
