@@ -56,26 +56,5 @@ services:
       - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
     restart: always
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./yandex_2643153d86de9bb9.html:/var/www/html/yandex_2643153d86de9bb9.html
-    depends_on:
-      - geshtalt
-    restart: always
-
-  # certbot:
-  #   image: certbot/certbot
-  #   container_name: certbot
-  #   volumes:
-  #     - ./certbot/conf:/etc/letsencrypt
-  #     - ./certbot/www:/var/www/certbot
-  #   entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-  #   restart: always
-
 volumes:
   redis_data:
