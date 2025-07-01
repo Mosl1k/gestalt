@@ -20,7 +20,7 @@ jobs:
 
     - name: Deploy to server
       run: |
-        ssh -o StrictHostKeyChecking=no root@geshtalt.ddns.net << 'EOF'
+        ssh -o StrictHostKeyChecking=no root@kpalch.ru << 'EOF'
           cd /root/gestalt/ || exit
           git pull origin main
           docker-compose up --build -d
