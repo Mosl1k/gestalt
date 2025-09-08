@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 import logging
+import g4f  # Импортируем g4f для предложения блюд
 
 # Настройка логирования
 logging.basicConfig(
@@ -43,27 +44,39 @@ PRIORITY_EMOJI = {
 CATEGORIES = list(LISTS.keys())
 
 def get_main_keyboard():
-    """Возвращает основную клавиатуру с категориями."""
+    """Возвращает основную клавиатуру с категориями и кнопкой 'Что приготовить'."""
     keyboard = [
         [InlineKeyboardButton(name, callback_data=f"list:{key}")]
         for key, name in LISTS.items()
     ]
+    keyboard.append([InlineKeyboardButton("Что приготовить 🍳", callback_data="suggest_dishes")])
     keyboard.append([InlineKeyboardButton("Рестарт", callback_data="restart")])
     return InlineKeyboardMarkup(keyboard)
 
 def get_list_keyboard(current_category):
-    """Возвращает клавиатуру для списка с кнопками Назад, Предыдущий, Следующий, Добавить."""
+    """Возвращает клавиатуру для списка с кнопками Назад, Предыдущий, Следующий, Добавить и Что приготовить."""
     current_index = CATEGORIES.index(current_category)
     prev_category = CATEGORIES[(current_index - 1) % len(CATEGORIES)]
     next_category = CATEGORIES[(current_index + 1) % len(CATEGORIES)]
 
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад", callback_data="restart")],
+        [InlineKeyboardButton("🔙 Назад", callback_data=f"back:{current_category}")],
         [
             InlineKeyboardButton("⬅️ Предыдущий", callback_data=f"list:{prev_category}"),
             InlineKeyboardButton("Следующий ➡️", callback_data=f"list:{next_category}")
         ],
-        [InlineKeyboardButton("➕ Добавить", callback_data=f"add:{current_category}")]
+        [InlineKeyboardButton("➕ Добавить", callback_data=f"add:{current_category}")],
+        [InlineKeyboardButton("Что приготовить 🍳", callback_data="suggest_dishes")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_item_actions_keyboard(item_name, category):
+    """Возвращает клавиатуру для действий с элементом."""
+    keyboard = [
+        [InlineKeyboardButton("Удалить", callback_data=f"item_action:delete:{item_name}:{category}")],
+        [InlineKeyboardButton("Сменить категорию", callback_data=f"item_action:change_cat:{item_name}:{category}")],
+        [InlineKeyboardButton("Сменить приоритет", callback_data=f"item_action:change_pri:{item_name}:{category}")],
+        [InlineKeyboardButton("Назад", callback_data=f"list:{category}")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -169,13 +182,7 @@ async def show_item_actions(update: Update, context):
     context.user_data["item_name"] = item_name
     context.user_data["category"] = category
 
-    keyboard = [
-        [InlineKeyboardButton("Удалить", callback_data=f"item_action:delete:{item_name}:{category}")],
-        [InlineKeyboardButton("Сменить категорию", callback_data=f"item_action:change_cat:{item_name}:{category}")],
-        [InlineKeyboardButton("Сменить приоритет", callback_data=f"item_action:change_pri:{item_name}:{category}")],
-        [InlineKeyboardButton("Назад", callback_data=f"list:{category}")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = get_item_actions_keyboard(item_name, category)
     await query.message.reply_text(f"Что сделать с '{item_name}' в {LISTS[category]}?", reply_markup=reply_markup)
 
 async def handle_item_action(update: Update, context):
@@ -357,6 +364,49 @@ async def change_priority_to(update: Update, context):
         logging.error(error_msg)
         await query.message.reply_text(error_msg)
 
+async def suggest_dishes(update: Update, context):
+    """Обработчик кнопки 'Что приготовить'. Предлагает блюда на основе содержимого холодильника."""
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        auth_str = f"{USERNAME}:{PASSWORD}"
+        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}"}
+
+        response = requests.get(f"{API_URL}/list?category=холодос", headers=auth_header)
+        if response.status_code != 200:
+            error_msg = f"Ошибка получения данных: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await query.message.reply_text(error_msg)
+            return
+
+        items = response.json()
+        items_in_fridge = [item['name'] for item in items if item.get('category', '').lower() == 'холодос' and item['name'].strip()]
+        
+        if not items_in_fridge:
+            reply_markup = get_main_keyboard()
+            await query.message.reply_text("В холодильнике пусто, нечего приготовить.", reply_markup=reply_markup)
+            return
+
+        prompt = f"Что можно приготовить из таких продуктов: {', '.join(items_in_fridge)}? Назови только 5 названий блюд."
+        try:
+            response_from_gpt = g4f.ChatCompletion.create(model='gpt-4', messages=[{"role": "user", "content": prompt}])
+            response_text = f"Можно приготовить:\n{response_from_gpt}"
+            reply_markup = get_main_keyboard()  # Возвращаемся в главное меню
+            await query.message.reply_text(response_text, reply_markup=reply_markup)
+        except Exception as e:
+            error_msg = f"Ошибка при обращении к GPT: {e}"
+            logging.error(error_msg)
+            await query.message.reply_text("Извините, произошла ошибка при запросе рецепта.", reply_markup=get_main_keyboard())
+    except requests.RequestException as e:
+        error_msg = f"Ошибка подключения к API: {e}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg, reply_markup=get_main_keyboard())
+    except Exception as e:
+        error_msg = f"Произошла ошибка: {str(e)}"
+        logging.error(error_msg)
+        await query.message.reply_text(error_msg, reply_markup=get_main_keyboard())
+
 async def button_callback(update: Update, context):
     """Обработчик нажатий на кнопки."""
     query = update.callback_query
@@ -366,7 +416,10 @@ async def button_callback(update: Update, context):
     if data == "restart":
         await start(update, context)
         return
-    if data.startswith("add"):
+    if data == "suggest_dishes":
+        await suggest_dishes(update, context)
+        return
+    if data.startswith("add:"):
         await add_start(update, context)
         return
     if data.startswith("add_to:"):
@@ -384,63 +437,69 @@ async def button_callback(update: Update, context):
     if data.startswith("pri:"):
         await change_priority_to(update, context)
         return
+    if data.startswith("back:"):
+        list_type = data.split(":")[1]
+        await show_list(update, context, list_type)
+        return
     if data.startswith("list:"):
         list_type = data.split(":")[1]
-        if list_type not in LISTS:
-            await query.message.reply_text(f"Неизвестная категория: {list_type}")
+        await show_list(update, context, list_type)
+        return
+
+async def show_list(update: Update, context, list_type):
+    """Показывает содержимое указанного списка."""
+    if list_type not in LISTS:
+        await update.callback_query.message.reply_text(f"Неизвестная категория: {list_type}")
+        return
+
+    try:
+        auth_str = f"{USERNAME}:{PASSWORD}"
+        auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}"}
+
+        response = requests.get(f"{API_URL}/list?category={list_type}", headers=auth_header)
+        if response.status_code != 200:
+            error_msg = f"Ошибка API: {response.status_code} - {response.text}"
+            logging.error(error_msg)
+            await update.callback_query.message.reply_text(error_msg)
             return
 
-        try:
-            auth_str = f"{USERNAME}:{PASSWORD}"
-            auth_header = {"Authorization": f"Basic {b64encode(auth_str.encode()).decode()}"}
+        items = response.json()
+        if not items:
+            response_text = f"{LISTS[list_type]} пуст."
+            reply_markup = get_list_keyboard(list_type)
+            await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
+            return
 
-            response = requests.get(f"{API_URL}/list?category={list_type}", headers=auth_header)
-            if response.status_code != 200:
-                error_msg = f"Ошибка API: {response.status_code} - {response.text}"
-                logging.error(error_msg)
-                await query.message.reply_text(error_msg)
-                return
+        response_text = f"{LISTS[list_type]}:\n"
+        keyboard = []
+        for item in items:
+            priority = item["priority"]
+            emoji = PRIORITY_EMOJI.get(priority, "🟡")
+            response_text += f"- {emoji} {item['name']}\n"
+            max_name_length = 50
+            safe_name = item['name'][:max_name_length].encode('utf-8').decode('utf-8', 'ignore')
+            callback_data = f"item:{safe_name}:{list_type}"
+            if len(callback_data.encode('utf-8')) > 64:
+                logging.error(f"Callback data too long for item: {item['name']} in category: {list_type}")
+                continue
+            keyboard.append([InlineKeyboardButton(f"{emoji} {item['name']}", callback_data=callback_data)])
 
-            items = response.json()
-            if not items:
-                response_text = f"{LISTS[list_type]} пуст."
-                reply_markup = get_list_keyboard(list_type)
-                await query.message.reply_text(response_text, reply_markup=reply_markup)
-                return
-
-            response_text = f"{LISTS[list_type]}:\n"
-            keyboard = []
-            for item in items:
-                priority = item["priority"]
-                emoji = PRIORITY_EMOJI.get(priority, "🟡")
-                response_text += f"- {emoji} {item['name']}\n"
-                max_name_length = 50
-                safe_name = item['name'][:max_name_length].encode('utf-8').decode('utf-8', 'ignore')
-                callback_data = f"item:{safe_name}:{list_type}"
-                if len(callback_data.encode('utf-8')) > 64:
-                    logging.error(f"Callback data too long for item: {item['name']} in category: {list_type}")
-                    continue
-                keyboard.append([InlineKeyboardButton(f"{emoji} {item['name']}", callback_data=callback_data)])
-
-            # Добавляем пустую строку (визуальный разделитель)
-            keyboard.append([])
-
-            # Добавляем управляющие кнопки
-            keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.message.reply_text(response_text, reply_markup=reply_markup)
-        except requests.RequestException as e:
-            error_msg = f"Ошибка подключения к API: {e}"
-            logging.error(error_msg)
-            await query.message.reply_text(error_msg)
-        except json.JSONDecodeError:
-            error_msg = "Ошибка: неверный формат данных от API."
-            logging.error(error_msg)
-            await query.message.reply_text(error_msg)
-        except Exception as e:
-            error_msg = f"Произошла ошибка: {str(e)}"
-            logging.error(error_msg)
-            await query.message.reply_text(error_msg)
+        keyboard.append([])
+        keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
+    except requests.RequestException as e:
+        error_msg = f"Ошибка подключения к API: {e}"
+        logging.error(error_msg)
+        await update.callback_query.message.reply_text(error_msg)
+    except json.JSONDecodeError:
+        error_msg = "Ошибка: неверный формат данных от API."
+        logging.error(error_msg)
+        await update.callback_query.message.reply_text(error_msg)
+    except Exception as e:
+        error_msg = f"Произошла ошибка: {str(e)}"
+        logging.error(error_msg)
+        await update.callback_query.message.reply_text(error_msg)
 
 def main():
     """Запуск бота."""
