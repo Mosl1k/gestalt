@@ -1163,6 +1163,7 @@ func internalListHandler(w http.ResponseWriter, r *http.Request) {
 	key := "shoppingList:" + userID + ":" + category
 	val, err := client.Get(ctx, key).Result()
 	if err == redis.Nil {
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]Item{})
 		return
 	} else if err != nil {
@@ -1177,6 +1178,7 @@ func internalListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
 
