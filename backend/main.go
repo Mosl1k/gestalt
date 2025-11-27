@@ -440,10 +440,13 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	if category == "купить" {
 		// Загружаем личный список
 		personalKey := "shoppingList:" + userID + ":" + category
-		personalVal, _ := client.Get(ctx, personalKey).Result()
+		personalVal, err := client.Get(ctx, personalKey).Result()
 		var personalItems []Item
-		if personalVal != "" {
-			json.Unmarshal([]byte(personalVal), &personalItems)
+		if err == nil && personalVal != "" {
+			if err := json.Unmarshal([]byte(personalVal), &personalItems); err != nil {
+				log.Printf("Ошибка парсинга JSON для %s: %v", personalKey, err)
+				personalItems = []Item{} // Используем пустой список при ошибке
+			}
 		}
 		
 		// Проверяем, есть ли общие списки
@@ -455,9 +458,12 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 				// Загружаем общий список друга (из его личного списка)
 				sharedKey := "shoppingList:" + ownerID + ":купить"
 				val, err := client.Get(ctx, sharedKey).Result()
-				if err == nil {
+				if err == nil && val != "" {
 					var sharedItems []Item
-					json.Unmarshal([]byte(val), &sharedItems)
+					if err := json.Unmarshal([]byte(val), &sharedItems); err != nil {
+						log.Printf("Ошибка парсинга JSON для %s: %v", sharedKey, err)
+						continue // Пропускаем невалидные данные
+					}
 					// Получаем имя владельца
 					ownerData, _ := client.Get(ctx, "user:"+ownerID).Result()
 					var ownerInfo map[string]string
@@ -482,7 +488,8 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	// Личный список (для всех категорий, кроме общих "купить")
 	key := "shoppingList:" + userID + ":" + category
 	val, err := client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if err == redis.Nil || val == "" {
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]Item{})
 		return
 	} else if err != nil {
@@ -493,10 +500,14 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 	var items []Item
 	err = json.Unmarshal([]byte(val), &items)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Ошибка парсинга JSON для %s: %v, значение: %s", key, err, val)
+		// Возвращаем пустой список вместо ошибки
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]Item{})
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
 }
 
@@ -540,11 +551,12 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
@@ -701,11 +713,12 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
@@ -759,11 +772,12 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
@@ -1090,9 +1104,15 @@ func shareListHandler(w http.ResponseWriter, r *http.Request) {
 	personalKey := "shoppingList:" + userID + ":" + req.Category
 	personalVal, err := client.Get(ctx, personalKey).Result()
 	if err == nil && personalVal != "" {
-		// Сохраняем копию списка для друга
-		sharedKey := "shoppingList:" + userID + ":" + req.Category
-		client.Set(ctx, sharedKey, personalVal, 0)
+		// Проверяем, что это валидный JSON
+		var items []Item
+		if err := json.Unmarshal([]byte(personalVal), &items); err == nil {
+			// Сохраняем копию списка для друга
+			sharedKey := "shoppingList:" + userID + ":" + req.Category
+			client.Set(ctx, sharedKey, personalVal, 0)
+		} else {
+			log.Printf("Ошибка парсинга JSON для %s: %v", personalKey, err)
+		}
 	}
 
 	// Добавляем в список общих списков друга
@@ -1162,7 +1182,7 @@ func internalListHandler(w http.ResponseWriter, r *http.Request) {
 
 	key := "shoppingList:" + userID + ":" + category
 	val, err := client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if err == redis.Nil || val == "" {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode([]Item{})
 		return
@@ -1174,7 +1194,10 @@ func internalListHandler(w http.ResponseWriter, r *http.Request) {
 	var items []Item
 	err = json.Unmarshal([]byte(val), &items)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Ошибка парсинга JSON для %s: %v, значение: %s", key, err, val)
+		// Возвращаем пустой список вместо ошибки
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]Item{})
 		return
 	}
 
@@ -1224,11 +1247,12 @@ func internalAddHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
@@ -1288,11 +1312,12 @@ func internalBuyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
@@ -1349,11 +1374,12 @@ func internalDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var items []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &items)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON: %v, значение: %s", err, val)
+			// Используем пустой список при ошибке парсинга
+			items = []Item{}
 		}
 	}
 
