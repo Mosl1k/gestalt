@@ -164,6 +164,12 @@ securityContext:
   runAsUser: 1000
   allowPrivilegeEscalation: false
 
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "*/20 * * * *"  # Каждые 20 минут
+  yandexMountPath: "/mnt/yandex/gestalt"
+
 # Node selector, tolerations and affinity
 nodeSelector: {}
 

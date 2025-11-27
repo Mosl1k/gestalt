@@ -1,0 +1,118 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "gestalt.fullname" . }}-shopping-backup
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: "*/20 * * * *"  # Каждые 20 минут
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "gestalt.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: redis:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              BACKUP_DIR="/mnt/yandex/gestalt"
+              BACKUP_FILE="$BACKUP_DIR/shopping.txt"
+              TEMP_FILE="/tmp/shopping_backup_$$.txt"
+              
+              # Создаем директорию
+              mkdir -p "$BACKUP_DIR"
+              
+              # Получаем пароль Redis
+              REDIS_PASSWORD=$(cat /etc/redis-password/password)
+              REDIS_HOST="{{ include "gestalt.fullname" . }}-redis"
+              REDIS_PORT="6379"
+              
+              # Функция для получения данных
+              get_redis_data() {
+                local key=$1
+                redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" GET "$key" 2>/dev/null || echo ""
+              }
+              
+              # Получаем все ключи списков
+              LIST_KEYS=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" KEYS "shoppingList:*" 2>/dev/null || echo "")
+              
+              if [ -z "$LIST_KEYS" ]; then
+                echo "Списки покупок пусты"
+                exit 0
+              fi
+              
+              # Формируем файл бэкапа
+              {
+                echo "=== Бэкап списка покупок ==="
+                echo "Дата: $(date '+%Y-%m-%d %H:%M:%S')"
+                echo ""
+                
+                for key in $LIST_KEYS; do
+                  IFS=':' read -r prefix user_id category <<< "$key"
+                  list_data=$(get_redis_data "$key")
+                  
+                  if [ -z "$list_data" ] || [ "$list_data" = "null" ]; then
+                    continue
+                  fi
+                  
+                  echo "--- Пользователь: $user_id | Категория: $category ---"
+                  
+                  # Парсим JSON через Python (если доступен в образе)
+                  if command -v python3 >/dev/null 2>&1; then
+                    echo "$list_data" | python3 -c "
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+    if isinstance(data, list):
+        for item in data:
+            status = '✓' if item.get('bought', False) else '☐'
+            priority = '🔥' if item.get('priority', 2) == 3 else ('🟡' if item.get('priority', 2) == 2 else '🟢')
+            print(f\"  {status} {priority} {item.get('name', '')}\")
+except:
+    print(f\"  {sys.stdin.read()}\")
+" 2>/dev/null || echo "  $list_data"
+                  else
+                    echo "  $list_data"
+                  fi
+                  
+                  echo ""
+                done
+                
+                echo "=== Конец бэкапа ==="
+              } > "$TEMP_FILE"
+              
+              mv "$TEMP_FILE" "$BACKUP_FILE"
+              echo "Бэкап успешно сохранен в $BACKUP_FILE"
+            volumeMounts:
+            - name: yandex-mount
+              mountPath: /mnt/yandex
+            - name: redis-password
+              mountPath: /etc/redis-password
+              readOnly: true
+          volumes:
+          - name: yandex-mount
+            hostPath:
+              path: /mnt/yandex
+              type: DirectoryOrCreate
+          - name: redis-password
+            secret:
+              secretName: {{ include "gestalt.fullname" . }}-secrets
+              items:
+              - key: REDIS_PASSWORD
+                path: password
+{{- end }}
+

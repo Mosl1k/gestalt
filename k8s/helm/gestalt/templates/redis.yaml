@@ -116,9 +116,10 @@ data:
     bind 0.0.0.0
     protected-mode yes
     requirepass {{REDIS_PASSWORD}}
+    # Сохраняем реже, так как бэкап делается в Яндекс.Облако отдельно
     save 900 1
     save 300 10
-    save 60 10000
+    # Убрали save 60 - не сохраняем каждую минуту
     dir /data
     appendonly yes
     appendfsync everysec
