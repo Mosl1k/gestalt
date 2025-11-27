@@ -473,7 +473,22 @@ async def show_list(update: Update, context, list_type):
                 await update.callback_query.message.reply_text(error_msg)
             return
 
-        items = response.json()
+        # Проверяем, что ответ не пустой и является JSON
+        if not response.text or response.text.strip() == "":
+            error_msg = "Пустой ответ от API"
+            logging.error(error_msg)
+            if update.callback_query:
+                await update.callback_query.message.reply_text(error_msg)
+            return
+
+        try:
+            items = response.json()
+        except json.JSONDecodeError as e:
+            error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
+            logging.error(error_msg)
+            if update.callback_query:
+                await update.callback_query.message.reply_text(f"Ошибка подключения к API: {e}")
+            return
         if not items:
             response_text = f"{LISTS[list_type]} пуст."
             reply_markup = get_list_keyboard(list_type)
