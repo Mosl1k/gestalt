@@ -212,7 +212,9 @@ else
             docker-compose restart redis || true
         else
             info "Остановка $service..."
-            docker-compose stop "$service" || true
+            docker-compose stop "$service" 2>/dev/null || true
+            # Удаляем контейнер для пересоздания с правильным именем
+            docker-compose rm -f "$service" 2>/dev/null || true
         fi
     done
 fi

@@ -53,6 +53,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.bot
+    container_name: telegram-bot
     depends_on:
       - redis
       - geshtalt
