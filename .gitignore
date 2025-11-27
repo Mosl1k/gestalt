@@ -1,13 +1,46 @@
+# Секреты и переменные окружения
 .env
-key.pem
-cert.pem
-certbot/*
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# Certbot сертификаты
+certbot/
+/etc/letsencrypt/
+
+# Временные и служебные файлы
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+
+# Служебные скрипты с секретами
 no_need/del.py
 no_need/decode_redis.py
 del.py
-kompose
-regru
 backup_redis.sh
 get.py
 migrate.go
-yandex_2643153d86de9bb9.html
+
+# Верификация Yandex
+yandex_*.html
+
+# Kubernetes/kompose
+kompose/
+regru/
+
+# Билды и артефакты
+/app
+/gestalt
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.iml

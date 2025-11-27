@@ -1,13 +1,18 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # Копируем go.mod и go.sum первыми для кэширования зависимостей
 COPY go.mod go.sum ./
-RUN go mod download
 
-# Копируем остальной код
-COPY . .
+# Копируем main.go чтобы go mod tidy мог проанализировать импорты
+COPY main.go ./
+
+# Обновляем зависимости и загружаем все необходимые модули
+RUN go mod download && go mod tidy
+
+# Копируем остальной код (исключая go.mod и go.sum, которые уже обновлены)
+COPY index.html ./
 
 # Компилируем приложение
 RUN go build -o gestalt ./main.go

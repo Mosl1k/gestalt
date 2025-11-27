@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +13,11 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
+	"github.com/joho/godotenv"
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/gothic"
+	"github.com/markbates/goth/providers/yandex"
 )
 
 type Item struct {
@@ -23,77 +28,294 @@ type Item struct {
 }
 
 var (
-	mutex    sync.Mutex
-	username string
-	password string
+	mutex sync.Mutex
+	store *sessions.CookieStore
 )
 
 func init() {
-	// Читаем логин и пароль из переменных окружения, переданных через docker-compose
-	username = os.Getenv("USERNAME")
-	password = os.Getenv("PASSWORD")
-	if username == "" || password == "" {
-		log.Fatal("USERNAME and PASSWORD must be set in .env")
+	// Загружаем переменные окружения из .env файла
+	godotenv.Load()
+
+	// Получаем секретный ключ из переменных окружения
+	sessionSecret := os.Getenv("SESSION_SECRET")
+	if sessionSecret == "" {
+		log.Fatal("Необходимо установить переменную окружения SESSION_SECRET")
+	}
+
+	// Создаём хранилище сессий с секретным ключом
+	store = sessions.NewCookieStore([]byte(sessionSecret))
+
+	// Настройка хранилища сессий
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 30, // 30 дней
+		HttpOnly: true,
+		Secure:   true, // true для HTTPS
+		SameSite: http.SameSiteLaxMode, // Защита от CSRF
+		// Domain не указываем, чтобы cookies работали через nginx proxy
+	}
+
+	// Инициализация OAuth2 провайдера Yandex
+	clientID := os.Getenv("YANDEX_CLIENT_ID")
+	clientSecret := os.Getenv("YANDEX_CLIENT_SECRET")
+	callbackURL := os.Getenv("YANDEX_CALLBACK_URL")
+
+	if clientID != "" && clientSecret != "" {
+		if callbackURL == "" {
+			callbackURL = "https://kpalch.ru/auth/yandex/callback"
+		}
+		goth.UseProviders(
+			yandex.New(clientID, clientSecret, callbackURL),
+		)
+		gothic.Store = store
+		log.Println("Yandex OAuth провайдер инициализирован")
+	} else {
+		log.Println("Предупреждение: YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET не установлены. OAuth будет недоступен.")
 	}
 }
 
 func main() {
 	r := mux.NewRouter()
 
-	r.Use(authMiddleware)
-	r.HandleFunc("/", indexHandler).Methods("GET")
-	r.HandleFunc("/auth", authHandler).Methods("GET") // Новый эндпоинт для передачи credentials
-	r.HandleFunc("/list", listHandler).Methods("GET")
-	r.HandleFunc("/add", addHandler).Methods("POST")
-	r.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
-	r.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
-	r.HandleFunc("/edit/{name}", editHandler).Methods("PUT")
-	r.HandleFunc("/reorder", reorderHandler).Methods("POST")
+	// Публичные маршруты (без авторизации)
+	r.HandleFunc("/", indexHandler).Methods("GET") // Главная страница доступна всем
+	r.HandleFunc("/auth/yandex", authHandler).Methods("GET")
+	r.HandleFunc("/auth/yandex/callback", callbackHandler).Methods("GET")
+	r.HandleFunc("/logout", logoutHandler).Methods("GET")
+
+	// Защищённые маршруты (требуют авторизации)
+	protected := r.PathPrefix("").Subrouter()
+	protected.Use(authMiddleware)
+	protected.HandleFunc("/list", listHandler).Methods("GET")
+	protected.HandleFunc("/add", addHandler).Methods("POST")
+	protected.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
+	protected.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
+	protected.HandleFunc("/edit/{name}", editHandler).Methods("PUT")
+	protected.HandleFunc("/reorder", reorderHandler).Methods("POST")
+	
+	// API для друзей
+	protected.HandleFunc("/api/user", getCurrentUserHandler).Methods("GET")
+	protected.HandleFunc("/api/users/search", searchUsersHandler).Methods("GET")
+	protected.HandleFunc("/api/users/all", getAllUsersHandler).Methods("GET")
+	protected.HandleFunc("/api/friends", getFriendsHandler).Methods("GET")
+	protected.HandleFunc("/api/friends/add", addFriendHandler).Methods("POST")
+	protected.HandleFunc("/api/friends/remove", removeFriendHandler).Methods("DELETE")
+	protected.HandleFunc("/api/shared-lists", getSharedListsHandler).Methods("GET")
+	protected.HandleFunc("/api/share-list", shareListHandler).Methods("POST")
+
 	fmt.Println("Server is running on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
+// Middleware для проверки авторизации через Yandex OAuth
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Authorization required", http.StatusUnauthorized)
+		session, _ := store.Get(r, "session")
+
+		// Проверяем, авторизован ли пользователь
+		userID, ok := session.Values["user_id"].(string)
+		if !ok || userID == "" {
+			// Пользователь не авторизован - перенаправляем на страницу авторизации
+			http.Redirect(w, r, "/auth/yandex", http.StatusTemporaryRedirect)
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, "Basic ") {
-			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
-			return
-		}
-
-		encodedCredentials := strings.TrimPrefix(authHeader, "Basic ")
-		decodedCredentials, err := base64.StdEncoding.DecodeString(encodedCredentials)
-		if err != nil {
-			http.Error(w, "Invalid base64 encoding", http.StatusUnauthorized)
-			return
-		}
-
-		credentials := strings.SplitN(string(decodedCredentials), ":", 2)
-		if len(credentials) != 2 || credentials[0] != username || credentials[1] != password {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-			return
-		}
-
+		// Пользователь авторизован - продолжаем
 		next.ServeHTTP(w, r)
 	})
 }
 
+// Обработчик начала авторизации через Yandex
 func authHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"username": username,
-		"password": password,
-	})
+	// Устанавливаем провайдер в контекст для gothic
+	// Gothic сам управляет состоянием OAuth, нам не нужно делать это вручную
+	ctx := context.WithValue(r.Context(), "provider", "yandex")
+	r = r.WithContext(ctx)
+
+	// Перенаправляем на страницу авторизации Yandex
+	// Gothic сам сгенерирует и сохранит состояние
+	gothic.BeginAuthHandler(w, r)
+}
+
+// Обработчик callback от Yandex
+func callbackHandler(w http.ResponseWriter, r *http.Request) {
+	// Проверяем, есть ли ошибка от Yandex
+	if errorParam := r.URL.Query().Get("error"); errorParam != "" {
+		errorDesc := r.URL.Query().Get("error_description")
+		if errorDesc == "" {
+			errorDesc = errorParam
+		}
+
+		errorHTML := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Ошибка авторизации</title>
+	<meta charset="UTF-8">
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			margin: 0;
+			background: #f5f5f5;
+		}
+		.container {
+			background: white;
+			padding: 40px;
+			border-radius: 10px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+			text-align: center;
+			max-width: 500px;
+		}
+		h1 { color: #dc3545; }
+		.error { 
+			background: #f8d7da;
+			color: #721c24;
+			padding: 15px;
+			border-radius: 5px;
+			margin: 20px 0;
+		}
+		.btn {
+			display: inline-block;
+			padding: 12px 30px;
+			background: #667eea;
+			color: white;
+			text-decoration: none;
+			border-radius: 5px;
+			font-weight: bold;
+			margin-top: 20px;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>❌ Ошибка авторизации</h1>
+		<div class="error">
+			<p><strong>Ошибка:</strong> %s</p>
+			<p>%s</p>
+		</div>
+		<a href="/" class="btn">Вернуться на главную</a>
+	</div>
+</body>
+</html>
+`, errorParam, errorDesc)
+
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, errorHTML)
+		return
+	}
+
+	// Устанавливаем провайдер в контекст для gothic
+	ctx := context.WithValue(r.Context(), "provider", "yandex")
+	r = r.WithContext(ctx)
+
+	// Получаем пользователя от провайдера
+	// Gothic сам проверяет состояние OAuth внутри CompleteUserAuth
+	user, err := gothic.CompleteUserAuth(w, r)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Ошибка авторизации: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Сохраняем информацию о пользователе в сессии
+	session, _ := store.Get(r, "session")
+	session.Values["user"] = user.Name
+	session.Values["email"] = user.Email
+	session.Values["provider"] = user.Provider
+	session.Values["user_id"] = user.UserID
+	session.Save(r, w)
+	
+	// Сохраняем информацию о пользователе в Redis для поиска друзей
+	saveUserToRedis(user.UserID, user.Name, user.Email)
+	
+	log.Printf("Пользователь авторизован: %s (%s)", user.Name, user.Email)
+
+	// Перенаправляем на главную страницу
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
+// Обработчик выхода
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+
+	// Очищаем сессию
+	session.Values = make(map[interface{}]interface{})
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+
+	// Перенаправляем на главную
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	
+	// Проверяем, авторизован ли пользователь
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		// Пользователь не авторизован - показываем приветственную страницу
+		welcomeHTML := `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Gestalt - Список покупок</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			margin: 0;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		}
+		.container {
+			background: white;
+			padding: 40px;
+			border-radius: 10px;
+			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+			text-align: center;
+			max-width: 500px;
+		}
+		h1 { color: #333; margin-bottom: 20px; }
+		p { color: #666; line-height: 1.6; }
+		.btn {
+			display: inline-block;
+			padding: 12px 30px;
+			background: #FFCC00;
+			color: #000;
+			text-decoration: none;
+			border-radius: 5px;
+			font-weight: bold;
+			margin-top: 20px;
+		}
+		.btn:hover {
+			background: #FFD700;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>🛒 Gestalt</h1>
+		<p>Добро пожаловать в систему управления списками покупок!</p>
+		<p>Для доступа к приложению необходимо авторизоваться через Yandex.</p>
+		<a href="/auth/yandex" class="btn">Войти через Yandex</a>
+	</div>
+</body>
+</html>
+`
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, welcomeHTML)
+		return
+	}
+
+	// Пользователь авторизован - показываем основное приложение
 	htmlFile, err := os.Open("index.html")
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -110,6 +332,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	ctx := r.Context()
 	client := getRedisClient()
 	defer client.Close()
@@ -120,7 +345,51 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := "shoppingList:" + category
+	// Для категории "купить" проверяем общие списки
+	if category == "купить" {
+		// Загружаем личный список
+		personalKey := "shoppingList:" + userID + ":" + category
+		personalVal, _ := client.Get(ctx, personalKey).Result()
+		var personalItems []Item
+		if personalVal != "" {
+			json.Unmarshal([]byte(personalVal), &personalItems)
+		}
+		
+		// Проверяем, есть ли общие списки
+		sharedLists, _ := client.SMembers(ctx, "shared_lists:"+userID).Result()
+		for _, listKey := range sharedLists {
+			parts := splitListKey(listKey)
+			if len(parts) == 2 && parts[1] == "купить" {
+				ownerID := parts[0]
+				// Загружаем общий список друга (из его личного списка)
+				sharedKey := "shoppingList:" + ownerID + ":купить"
+				val, err := client.Get(ctx, sharedKey).Result()
+				if err == nil {
+					var sharedItems []Item
+					json.Unmarshal([]byte(val), &sharedItems)
+					// Получаем имя владельца
+					ownerData, _ := client.Get(ctx, "user:"+ownerID).Result()
+					var ownerInfo map[string]string
+					ownerName := ownerID
+					if ownerData != "" {
+						json.Unmarshal([]byte(ownerData), &ownerInfo)
+						ownerName = ownerInfo["name"]
+					}
+					// Добавляем информацию о владельце
+					for i := range sharedItems {
+						sharedItems[i].Name = "[" + ownerName + "] " + sharedItems[i].Name
+					}
+					personalItems = append(personalItems, sharedItems...)
+				}
+			}
+		}
+		
+		json.NewEncoder(w).Encode(personalItems)
+		return
+	}
+
+	// Личный список (для всех категорий, кроме общих "купить")
+	key := "shoppingList:" + userID + ":" + category
 	val, err := client.Get(ctx, key).Result()
 	if err == redis.Nil {
 		json.NewEncoder(w).Encode([]Item{})
@@ -141,6 +410,9 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func addHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	var newItem Item
 	err := json.NewDecoder(r.Body).Decode(&newItem)
 	if err != nil {
@@ -168,7 +440,8 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	key := "shoppingList:" + newItem.Category
+	// Всегда сохраняем в личный список пользователя
+	key := "shoppingList:" + userID + ":" + newItem.Category
 	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -206,6 +479,9 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func editHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	vars := mux.Vars(r)
 	oldName := vars["name"]
 
@@ -229,7 +505,7 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	oldKey := "shoppingList:" + oldCategory
+	oldKey := "shoppingList:" + userID + ":" + oldCategory
 	val, err := client.Get(ctx, oldKey).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -264,7 +540,7 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newKey := "shoppingList:" + editedItem.Category
+	newKey := "shoppingList:" + userID + ":" + editedItem.Category
 	val, err = client.Get(ctx, newKey).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -303,6 +579,9 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func buyHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	vars := mux.Vars(r)
 	itemName := vars["name"]
 
@@ -323,7 +602,7 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	key := "shoppingList:" + item.Category
+	key := "shoppingList:" + userID + ":" + item.Category
 	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -362,6 +641,9 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	vars := mux.Vars(r)
 	itemName := vars["name"]
 
@@ -378,7 +660,7 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	key := "shoppingList:" + category
+	key := "shoppingList:" + userID + ":" + category
 	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -418,6 +700,9 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func reorderHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+	
 	var items []Item
 	err := json.NewDecoder(r.Body).Decode(&items)
 	if err != nil {
@@ -431,7 +716,7 @@ func reorderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	category := items[0].Category
-	key := "shoppingList:" + category
+	key := "shoppingList:" + userID + ":" + category
 
 	ctx := r.Context()
 	client := getRedisClient()
@@ -453,6 +738,292 @@ func reorderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// Сохранение пользователя в Redis для поиска друзей
+func saveUserToRedis(userID, name, email string) {
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	userData := map[string]interface{}{
+		"name":  name,
+		"email": email,
+	}
+	userJSON, _ := json.Marshal(userData)
+	
+	// Сохраняем пользователя с ключом user:{userID}
+	client.Set(ctx, "user:"+userID, userJSON, 0)
+	
+	// Добавляем в список всех пользователей
+	client.SAdd(ctx, "users:all", userID)
+}
+
+// Получение данных текущего пользователя
+func getCurrentUserHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	
+	user := map[string]string{
+		"id":    session.Values["user_id"].(string),
+		"name":  session.Values["user"].(string),
+		"email": session.Values["email"].(string),
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
+// Получение всех пользователей (кроме текущего и друзей)
+func getAllUsersHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	currentUserID := session.Values["user_id"].(string)
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Получаем список друзей
+	friendIDs, _ := client.SMembers(ctx, "friends:"+currentUserID).Result()
+	friendMap := make(map[string]bool)
+	for _, id := range friendIDs {
+		friendMap[id] = true
+	}
+
+	// Получаем всех пользователей
+	userIDs, _ := client.SMembers(ctx, "users:all").Result()
+	
+	var users []map[string]string
+	for _, userID := range userIDs {
+		if userID == currentUserID || friendMap[userID] {
+			continue // Пропускаем текущего пользователя и друзей
+		}
+		
+		userData, err := client.Get(ctx, "user:"+userID).Result()
+		if err != nil {
+			continue
+		}
+		
+		var userInfo map[string]string
+		json.Unmarshal([]byte(userData), &userInfo)
+		userInfo["id"] = userID
+		users = append(users, userInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+// Поиск пользователей
+func searchUsersHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	currentUserID := session.Values["user_id"].(string)
+	
+	query := r.URL.Query().Get("q")
+	if query == "" {
+		query = ""
+	}
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Получаем список друзей
+	friendIDs, _ := client.SMembers(ctx, "friends:"+currentUserID).Result()
+	friendMap := make(map[string]bool)
+	for _, id := range friendIDs {
+		friendMap[id] = true
+	}
+
+	// Получаем всех пользователей
+	userIDs, _ := client.SMembers(ctx, "users:all").Result()
+	
+	var users []map[string]string
+	for _, userID := range userIDs {
+		if userID == currentUserID || friendMap[userID] {
+			continue // Пропускаем текущего пользователя и друзей
+		}
+		
+		userData, err := client.Get(ctx, "user:"+userID).Result()
+		if err != nil {
+			continue
+		}
+		
+		var userInfo map[string]string
+		json.Unmarshal([]byte(userData), &userInfo)
+		
+		// Фильтрация по запросу (если есть)
+		if query == "" || 
+		   contains(userInfo["name"], query) || 
+		   contains(userInfo["email"], query) {
+			userInfo["id"] = userID
+			users = append(users, userInfo)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+// Получение списка друзей
+func getFriendsHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Получаем список друзей
+	friendIDs, _ := client.SMembers(ctx, "friends:"+userID).Result()
+	
+	var friends []map[string]string
+	for _, friendID := range friendIDs {
+		userData, err := client.Get(ctx, "user:"+friendID).Result()
+		if err != nil {
+			continue
+		}
+		
+		var userInfo map[string]string
+		json.Unmarshal([]byte(userData), &userInfo)
+		userInfo["id"] = friendID
+		friends = append(friends, userInfo)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(friends)
+}
+
+// Добавление друга
+func addFriendHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+
+	var req struct {
+		FriendID string `json:"friend_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Добавляем друга (двусторонняя связь)
+	client.SAdd(ctx, "friends:"+userID, req.FriendID)
+	client.SAdd(ctx, "friends:"+req.FriendID, userID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Friend added"})
+}
+
+// Удаление друга
+func removeFriendHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+
+	friendID := r.URL.Query().Get("friend_id")
+	if friendID == "" {
+		http.Error(w, "friend_id is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Удаляем друга (двусторонняя связь)
+	client.SRem(ctx, "friends:"+userID, friendID)
+	client.SRem(ctx, "friends:"+friendID, userID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Friend removed"})
+}
+
+// Получение общих списков (списки, которыми поделились с пользователем)
+func getSharedListsHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Получаем списки, которыми поделились с пользователем
+	sharedLists, _ := client.SMembers(ctx, "shared_lists:"+userID).Result()
+	
+	var lists []map[string]string
+	for _, listKey := range sharedLists {
+		// listKey имеет формат "owner_id:купить"
+		parts := splitListKey(listKey)
+		if len(parts) == 2 {
+			ownerID := parts[0]
+			category := parts[1]
+			
+			ownerData, _ := client.Get(ctx, "user:"+ownerID).Result()
+			var ownerInfo map[string]string
+			json.Unmarshal([]byte(ownerData), &ownerInfo)
+			
+			lists = append(lists, map[string]string{
+				"owner_id": ownerID,
+				"owner_name": ownerInfo["name"],
+				"category": category,
+			})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(lists)
+}
+
+// Поделиться списком с другом
+func shareListHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	userID := session.Values["user_id"].(string)
+
+	var req struct {
+		FriendID string `json:"friend_id"`
+		Category string `json:"category"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// Можно делиться только списком "купить"
+	if req.Category != "купить" {
+		http.Error(w, "Можно делиться только списком 'купить'", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	client := getRedisClient()
+	defer client.Close()
+
+	// Копируем текущий список в общий список
+	personalKey := "shoppingList:" + userID + ":" + req.Category
+	personalVal, err := client.Get(ctx, personalKey).Result()
+	if err == nil && personalVal != "" {
+		// Сохраняем копию списка для друга
+		sharedKey := "shoppingList:" + userID + ":" + req.Category
+		client.Set(ctx, sharedKey, personalVal, 0)
+	}
+
+	// Добавляем в список общих списков друга
+	listKey := userID + ":" + req.Category
+	client.SAdd(ctx, "shared_lists:"+req.FriendID, listKey)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "List shared"})
+}
+
+// Вспомогательные функции
+func contains(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
+
+func splitListKey(key string) []string {
+	for i := 0; i < len(key); i++ {
+		if key[i] == ':' {
+			return []string{key[:i], key[i+1:]}
+		}
+	}
+	return []string{key}
 }
 
 func getRedisClient() *redis.Client {

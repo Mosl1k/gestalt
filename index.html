@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping List</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
         .купить { color: green; }
         .не-забыть { color: red; }
         .дом { color: orange; }
@@ -16,6 +24,7 @@
             flex-wrap: wrap;
             gap: 10px;
             justify-content: space-between;
+            padding: 0 10px;
         }
         .filter-buttons button {
             flex: 1;
@@ -25,16 +34,25 @@
         .active { font-weight: bold; }
         #editModal, #addModal {
             position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            border: 1px solid #ccc;
-            padding: 30px;
-            background: white;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
             display: none;
             z-index: 1000;
-            width: 400px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #editModal > div, #addModal > div {
+            max-width: 400px;
+            width: 100%;
+            margin: 20px auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
         #editModal input, #addModal input,
         #editModal select, #addModal select,
@@ -50,6 +68,19 @@
         }
         #editModal button:last-child, #addModal button:last-child {
             margin-right: 0;
+        }
+        @media (max-width: 480px) {
+            #editModal, #addModal {
+                padding: 10px;
+            }
+            #editModal > div, #addModal > div {
+                padding: 20px;
+                margin: 10px auto;
+            }
+            #accountModal > div {
+                padding: 15px;
+                margin: 10px auto;
+            }
         }
         .nav-buttons {
             position: fixed;
@@ -115,43 +146,89 @@
         <button id="homeButton" onclick="filterCategory('дом')">дом</button>
         <button id="carButton" onclick="filterCategory('машина')">машина</button>
         <button id="frigeButton" onclick="filterCategory('холодос')">холодос</button>
+        <button onclick="openAccountModal()">Аккаунт</button>
     </div>
     <ul id="shoppingList"></ul>
 
     <div id="editModal">
-        <input type="text" id="editItemName" placeholder="New item name">
-        <select id="editItemCategory">
-            <option value="купить">Купить</option>
-            <option value="не-забыть">Не забыть</option>
-            <option value="дом">дом</option>
-            <option value="машина">машина</option>
-            <option value="холодос">холодос</option>
-        </select>
-        <select id="editItemPriority">
-            <option value="1">Низкий</option>
-            <option value="2">Средний</option>
-            <option value="3">Высокий</option>
-        </select>
-        <button onclick="saveEditItem()">Save</button>
-        <button onclick="closeEditModal()">Cancel</button>
+        <div>
+            <input type="text" id="editItemName" placeholder="New item name">
+            <select id="editItemCategory">
+                <option value="купить">Купить</option>
+                <option value="не-забыть">Не забыть</option>
+                <option value="дом">дом</option>
+                <option value="машина">машина</option>
+                <option value="холодос">холодос</option>
+            </select>
+            <select id="editItemPriority">
+                <option value="1">Низкий</option>
+                <option value="2">Средний</option>
+                <option value="3">Высокий</option>
+            </select>
+            <button onclick="saveEditItem()">Save</button>
+            <button onclick="closeEditModal()">Cancel</button>
+        </div>
     </div>
 
     <div id="addModal">
-        <input type="text" id="addItemName" placeholder="Item name">
-        <select id="addItemCategory">
-            <option value="купить">Купить</option>
-            <option value="не-забыть">Не забыть</option>
-            <option value="дом">дом</option>
-            <option value="машина">машина</option>
-            <option value="холодос">холодос</option>
-        </select>
-        <select id="addItemPriority">
-            <option value="1">Низкий</option>
-            <option value="2" selected>Средний</option>
-            <option value="3">Высокий</option>
-        </select>
-        <button onclick="addItem()">Add</button>
-        <button onclick="closeAddModal()">Cancel</button>
+        <div>
+            <input type="text" id="addItemName" placeholder="Item name">
+            <select id="addItemCategory">
+                <option value="купить">Купить</option>
+                <option value="не-забыть">Не забыть</option>
+                <option value="дом">дом</option>
+                <option value="машина">машина</option>
+                <option value="холодос">холодос</option>
+            </select>
+            <select id="addItemPriority">
+                <option value="1">Низкий</option>
+                <option value="2" selected>Средний</option>
+                <option value="3">Высокий</option>
+            </select>
+            <button onclick="addItem()">Add</button>
+            <button onclick="closeAddModal()">Cancel</button>
+        </div>
+    </div>
+
+    <div id="accountModal" style="display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; padding: 20px; box-sizing: border-box; -webkit-overflow-scrolling: touch;">
+        <div style="max-width: 500px; width: 100%; margin: 20px auto; background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); position: relative;">
+        <h2>Аккаунт</h2>
+        
+        <div id="userInfo" style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+            <p><strong>Имя:</strong> <span id="userName">-</span></p>
+            <p><strong>Email:</strong> <span id="userEmail">-</span></p>
+            <button onclick="logout()" style="width: 100%; padding: 10px; margin-top: 10px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">Выйти</button>
+        </div>
+
+        <div>
+            <h3>Поиск пользователей</h3>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="searchUsersInput" placeholder="Поиск по имени или email" style="flex: 1; padding: 10px;">
+                <button onclick="searchUsers()" style="padding: 10px 20px;">Поиск</button>
+            </div>
+            <div id="searchResults" style="margin-top: 10px;"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h3>Все пользователи</h3>
+            <div id="allUsersList"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h3>Мои друзья</h3>
+            <div id="friendsList"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h3>Поделиться списком "Купить"</h3>
+            <select id="shareWithFriend" style="width: 100%; padding: 10px; margin: 10px 0;">
+                <option value="">Выберите друга</option>
+            </select>
+            <button onclick="shareList()" style="width: 100%; padding: 10px;">Поделиться</button>
+        </div>
+
+        <button onclick="closeAccountModal()" style="margin-top: 20px; width: 100%; padding: 10px;">Закрыть</button>
+        </div>
     </div>
 
     <div>
@@ -173,26 +250,10 @@
         const filters = ['купить', 'не-забыть', 'дом', 'машина', 'холодос'];
         let filterIndex = 0;
         let currentItems = [];
-        let authHeader = '';
 
-        // Получаем credentials с сервера
-        async function fetchAuthCredentials() {
-            try {
-                const response = await fetch('/auth');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch auth credentials');
-                }
-                const data = await response.json();
-                authHeader = 'Basic ' + btoa(`${data.username}:${data.password}`);
-                loadCurrentState();
-            } catch (error) {
-                console.error('Error fetching auth credentials:', error);
-                alert('Не удалось загрузить данные авторизации. Проверьте сервер.');
-            }
-        }
-
+        // Авторизация теперь через сессии, не нужен Basic Auth
         document.addEventListener('DOMContentLoaded', function() {
-            fetchAuthCredentials();
+            loadCurrentState();
             setupDragAndDrop();
         });
 
@@ -233,9 +294,9 @@
             fetch('/reorder', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': authHeader
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify(currentItems),
             })
             .then(response => {
@@ -257,9 +318,9 @@
             fetch('/add', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': authHeader
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     name: itemName,
                     category: itemCategory,
@@ -284,9 +345,9 @@
             fetch('/buy/' + encodeURIComponent(name), {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': authHeader
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({ bought: checked, category: currentFilter }),
             })
             .then(response => {
@@ -299,9 +360,7 @@
         function deleteItem(name) {
             fetch(`/delete/${encodeURIComponent(name)}?category=${encodeURIComponent(currentFilter)}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': authHeader
-                },
+                credentials: 'include',
             })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
@@ -312,9 +371,7 @@
 
         function filterCategory(category) {
             fetch(`/list?category=${encodeURIComponent(category)}`, {
-                headers: {
-                    'Authorization': authHeader
-                }
+                credentials: 'include'
             })
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
@@ -436,9 +493,9 @@
             fetch(`/edit/${encodeURIComponent(currentEditItem)}?oldCategory=${encodeURIComponent(currentFilter)}`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': authHeader
+                    'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     name: newName,
                     category: newCategory,
@@ -470,6 +527,23 @@
             document.getElementById('addModal').style.display = 'none';
         }
 
+        // Закрытие модальных окон при клике вне их
+        window.onclick = function(event) {
+            const editModal = document.getElementById('editModal');
+            const addModal = document.getElementById('addModal');
+            const accountModal = document.getElementById('accountModal');
+            
+            if (event.target == editModal) {
+                closeEditModal();
+            }
+            if (event.target == addModal) {
+                closeAddModal();
+            }
+            if (event.target == accountModal) {
+                closeAccountModal();
+            }
+        }
+
         function navigateFilter(direction) {
             if (direction === 'left') filterIndex = filterIndex > 0 ? filterIndex - 1 : filters.length - 1;
             else if (direction === 'right') filterIndex = filterIndex < filters.length - 1 ? filterIndex + 1 : 0;
@@ -478,6 +552,181 @@
             filterCategory(category);
             updateActiveButton(category);
             saveCurrentState();
+        }
+
+        // Функции для работы с аккаунтом и друзьями
+        async function openAccountModal() {
+            document.getElementById('accountModal').style.display = 'block';
+            await loadUserInfo();
+            await loadAllUsers();
+            await loadFriends();
+        }
+
+        function closeAccountModal() {
+            document.getElementById('accountModal').style.display = 'none';
+        }
+
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/api/user', {
+                    credentials: 'include'
+                });
+                const user = await response.json();
+                document.getElementById('userName').textContent = user.name || '-';
+                document.getElementById('userEmail').textContent = user.email || '-';
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+
+        function logout() {
+            window.location.href = '/logout';
+        }
+
+        async function loadAllUsers() {
+            try {
+                const response = await fetch('/api/users/all', {
+                    credentials: 'include'
+                });
+                const users = await response.json();
+                
+                const allUsersDiv = document.getElementById('allUsersList');
+                allUsersDiv.innerHTML = '';
+                if (users.length === 0) {
+                    allUsersDiv.innerHTML = '<p>Нет пользователей для добавления</p>';
+                    return;
+                }
+                users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.style.padding = '10px';
+                    div.style.border = '1px solid #ccc';
+                    div.style.margin = '5px 0';
+                    div.innerHTML = `
+                        <strong>${user.name}</strong> (${user.email})
+                        <button onclick="addFriend('${user.id}')" style="float: right;">Добавить в друзья</button>
+                    `;
+                    allUsersDiv.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading all users:', error);
+            }
+        }
+
+        async function searchUsers() {
+            const query = document.getElementById('searchUsersInput').value;
+            try {
+                const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+                    credentials: 'include'
+                });
+                const users = await response.json();
+                
+                const resultsDiv = document.getElementById('searchResults');
+                resultsDiv.innerHTML = '';
+                if (users.length === 0) {
+                    resultsDiv.innerHTML = '<p>Ничего не найдено</p>';
+                    return;
+                }
+                users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.style.padding = '10px';
+                    div.style.border = '1px solid #ccc';
+                    div.style.margin = '5px 0';
+                    div.innerHTML = `
+                        <strong>${user.name}</strong> (${user.email})
+                        <button onclick="addFriend('${user.id}')" style="float: right;">Добавить в друзья</button>
+                    `;
+                    resultsDiv.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error searching users:', error);
+            }
+        }
+
+        async function addFriend(friendID) {
+            try {
+                const response = await fetch('/api/friends/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ friend_id: friendID })
+                });
+                if (response.ok) {
+                    await loadFriends();
+                    await loadAllUsers();
+                    searchUsers();
+                }
+            } catch (error) {
+                console.error('Error adding friend:', error);
+            }
+        }
+
+        async function loadFriends() {
+            try {
+                const response = await fetch('/api/friends', {
+                    credentials: 'include'
+                });
+                const friends = await response.json();
+                
+                const friendsDiv = document.getElementById('friendsList');
+                friendsDiv.innerHTML = '';
+                friends.forEach(friend => {
+                    const div = document.createElement('div');
+                    div.style.padding = '10px';
+                    div.style.border = '1px solid #ccc';
+                    div.style.margin = '5px 0';
+                    div.innerHTML = `
+                        <strong>${friend.name}</strong> (${friend.email})
+                        <button onclick="removeFriend('${friend.id}')" style="float: right;">Удалить</button>
+                    `;
+                    friendsDiv.appendChild(div);
+                });
+
+                // Обновляем список для шаринга
+                const shareSelect = document.getElementById('shareWithFriend');
+                shareSelect.innerHTML = '<option value="">Выберите друга</option>';
+                friends.forEach(friend => {
+                    const option = document.createElement('option');
+                    option.value = friend.id;
+                    option.textContent = friend.name;
+                    shareSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading friends:', error);
+            }
+        }
+
+        async function removeFriend(friendID) {
+            try {
+                const response = await fetch(`/api/friends/remove?friend_id=${encodeURIComponent(friendID)}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    await loadFriends();
+                    await loadAllUsers();
+                }
+            } catch (error) {
+                console.error('Error removing friend:', error);
+            }
+        }
+
+        async function shareList() {
+            const friendID = document.getElementById('shareWithFriend').value;
+            if (!friendID) return;
+
+            try {
+                const response = await fetch('/api/share-list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ friend_id: friendID, category: 'купить' })
+                });
+                if (response.ok) {
+                    alert('Список успешно отправлен другу!');
+                }
+            } catch (error) {
+                console.error('Error sharing list:', error);
+            }
         }
     </script>
 </body>
