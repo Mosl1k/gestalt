@@ -1,0 +1,47 @@
+{{- if .Values.domain.autoDetect }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "gestalt.fullname" . }}-detect-domain
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: domain-detector
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: detect-domain
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Получаем IP сервера
+          SERVER_IP=$(curl -s https://api.ipify.org || echo "")
+          if [ -z "$SERVER_IP" ]; then
+            echo "Ошибка: не удалось определить IP"
+            exit 1
+          fi
+          
+          # Определяем домен через reverse DNS
+          DOMAIN=$(dig +short -x "$SERVER_IP" 2>/dev/null | sed 's/\.$//' || echo "")
+          
+          if [ -z "$DOMAIN" ]; then
+            echo "Предупреждение: не удалось определить домен, используем IP: $SERVER_IP"
+            DOMAIN="$SERVER_IP"
+          fi
+          
+          echo "Определен домен: $DOMAIN"
+          
+          # Сохраняем в ConfigMap
+          kubectl create configmap {{ include "gestalt.fullname" . }}-domain \
+            --from-literal=DOMAIN="$DOMAIN" \
+            --from-literal=SERVER_IP="$SERVER_IP" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        env:
+        - name: KUBECONFIG
+          value: /var/run/secrets/kubernetes.io/serviceaccount/..data/..2023_01_01_00_00_00.000000000/kubeconfig
+      serviceAccountName: {{ include "gestalt.serviceAccountName" . }}
+{{- end }}
+

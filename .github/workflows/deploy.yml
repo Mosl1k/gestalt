@@ -1,27 +1,118 @@
-name: Deploy
+name: Build and Deploy
 
 on:
   push:
     branches:
-      - main  # или другая ветка, на которую хотите реагировать
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - name: geshtalt
+            dockerfile: docker/Dockerfile
+            context: .
+          - name: alice
+            dockerfile: docker/Dockerfile.python
+            context: .
+          - name: telegram-bot
+            dockerfile: docker/Dockerfile.bot
+            context: .
+          - name: nginx
+            dockerfile: docker/Dockerfile.nginx
+            context: .
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Setup SSH
-      uses: webfactory/ssh-agent@v0.5.3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
       with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Deploy to server
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/gestalt-${{ matrix.service.name }}
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ matrix.service.context }}
+        file: ${{ matrix.service.dockerfile }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'latest'
+
+    # Option 1: Update ArgoCD Application (if using ArgoCD)
+    - name: Update ArgoCD Application
       run: |
-        ssh -o StrictHostKeyChecking=no root@kpalch.ru << 'EOF'
-          cd /root/gestalt/ || exit
-          git pull origin main
-          docker-compose up --build -d
-        EOF
+        # ArgoCD will automatically sync when it detects changes
+        # Or trigger sync via ArgoCD CLI/API
+        echo "ArgoCD will auto-sync on next refresh interval"
+        
+    # Option 2: Direct Helm deployment (alternative to ArgoCD)
+    # Uncomment if not using ArgoCD
+    # - name: Configure kubectl
+    #   run: |
+    #     echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+    #     export KUBECONFIG=./kubeconfig
+    #
+    # - name: Deploy with Helm
+    #   run: |
+    #     helm upgrade --install gestalt ./k8s/helm/gestalt \
+    #       --namespace gestalt \
+    #       --create-namespace \
+    #       --set geshtalt.image.tag=latest \
+    #       --set alice.image.tag=latest \
+    #       --set telegramBot.image.tag=latest \
+    #       --set nginx.image.tag=latest \
+    #       --set secrets.redisPassword="${{ secrets.REDIS_PASSWORD }}" \
+    #       --set secrets.sessionSecret="${{ secrets.SESSION_SECRET }}" \
+    #       --set secrets.yandexClientId="${{ secrets.YANDEX_CLIENT_ID }}" \
+    #       --set secrets.yandexClientSecret="${{ secrets.YANDEX_CLIENT_SECRET }}" \
+    #       --set secrets.telegramToken="${{ secrets.TELEGRAM_TOKEN }}" \
+    #       --set secrets.serviceUserId="${{ secrets.SERVICE_USER_ID }}"

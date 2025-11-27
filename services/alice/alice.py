@@ -131,5 +131,15 @@ def webhook():
     return jsonify(response)
 
 if __name__ == '__main__':
-    context = ('/etc/letsencrypt/live/kpalch.ru/fullchain.pem', '/etc/letsencrypt/live/kpalch.ru/privkey.pem')
+    # Определяем домен из переменной окружения или используем дефолтный путь
+    domain = os.getenv('DOMAIN', 'localhost')
+    cert_path = f'/etc/letsencrypt/live/{domain}/fullchain.pem'
+    key_path = f'/etc/letsencrypt/live/{domain}/privkey.pem'
+    
+    # Проверяем существование сертификатов
+    if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        # Если сертификаты не найдены, используем HTTP
+        context = None
+    else:
+        context = (cert_path, key_path)
     app.run(host='0.0.0.0', port=2112, ssl_context=context)

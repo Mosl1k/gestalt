@@ -1,0 +1,70 @@
+{{- if .Values.telegramBot.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gestalt.fullname" . }}-telegram-bot
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telegram-bot
+spec:
+  replicas: {{ .Values.telegramBot.replicas }}
+  selector:
+    matchLabels:
+      {{- include "gestalt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: telegram-bot
+  template:
+    metadata:
+      labels:
+        {{- include "gestalt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: telegram-bot
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ include "gestalt.serviceAccountName" . }}
+      containers:
+      - name: telegram-bot
+        image: "{{ .Values.telegramBot.image.repository }}:{{ .Values.telegramBot.image.tag }}"
+        imagePullPolicy: {{ .Values.telegramBot.image.pullPolicy }}
+        env:
+        - name: TELEGRAM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gestalt.fullname" . }}-secrets
+              key: TELEGRAM_TOKEN
+        - name: API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gestalt.fullname" . }}-config
+              key: API_URL
+        - name: SERVICE_USER_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gestalt.fullname" . }}-secrets
+              key: SERVICE_USER_ID
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gestalt.fullname" . }}-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gestalt.fullname" . }}-config
+              key: REDIS_PORT
+        - name: REDIS_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gestalt.fullname" . }}-config
+              key: REDIS_DB
+        resources:
+          {{- toYaml .Values.telegramBot.resources | nindent 10 }}
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "ps aux | grep -v grep | grep telegram_bot.py"
+          initialDelaySeconds: 60
+          periodSeconds: 30
+{{- end }}
+

@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gestalt
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Mosl1k/gestalt
+    targetRevision: main
+    path: k8s/helm/gestalt
+    helm:
+      valueFiles:
+        - values.yaml
+      # Values can be overridden here or via external-secrets
+      values: |
+        geshtalt:
+          image:
+            tag: "latest"
+        alice:
+          image:
+            tag: "latest"
+        telegramBot:
+          image:
+            tag: "latest"
+        nginx:
+          image:
+            tag: "latest"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gestalt
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

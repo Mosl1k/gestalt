@@ -11,8 +11,12 @@ RUN mkdir -p /etc/letsencrypt
 
 # Скрипт для получения сертификата при первом запуске
 RUN echo '#!/bin/sh' > /usr/local/bin/init-cert.sh && \
-    echo 'if [ ! -f /etc/letsencrypt/live/kpalch.ru/fullchain.pem ]; then' >> /usr/local/bin/init-cert.sh && \
-    echo '  certbot certonly --standalone -d kpalch.ru --non-interactive --agree-tos --email your-email@example.com || true' >> /usr/local/bin/init-cert.sh && \
+    echo 'if [ -z "$DOMAIN" ]; then' >> /usr/local/bin/init-cert.sh && \
+    echo '  DOMAIN=$(dig +short -x $(curl -s https://api.ipify.org) | sed "s/\\.$//" || echo "")' >> /usr/local/bin/init-cert.sh && \
+    echo 'fi' >> /usr/local/bin/init-cert.sh && \
+    echo 'if [ -n "$DOMAIN" ] && [ ! -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ]; then' >> /usr/local/bin/init-cert.sh && \
+    echo '  certbot certonly --standalone -d ${DOMAIN} --non-interactive --agree-tos --email ${CERTBOT_EMAIL:-admin@${DOMAIN}} || true' >> /usr/local/bin/init-cert.sh && \
+    echo 'fi' >> /usr/local/bin/init-cert.sh && \
     echo 'fi' >> /usr/local/bin/init-cert.sh && \
     chmod +x /usr/local/bin/init-cert.sh
 

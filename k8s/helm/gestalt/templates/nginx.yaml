@@ -1,0 +1,239 @@
+{{- if .Values.nginx.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gestalt.fullname" . }}-nginx
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+spec:
+  replicas: {{ .Values.nginx.replicas }}
+  selector:
+    matchLabels:
+      {{- include "gestalt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nginx
+  template:
+    metadata:
+      labels:
+        {{- include "gestalt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nginx
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ include "gestalt.serviceAccountName" . }}
+      initContainers:
+      {{- if .Values.domain.autoDetect }}
+      - name: detect-domain-and-cert
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache curl bind-tools certbot
+          
+          # Определяем домен
+          SERVER_IP=$(curl -s https://api.ipify.org || curl -s https://ifconfig.me)
+          if [ -z "$SERVER_IP" ]; then
+            echo "Ошибка: не удалось определить IP"
+            exit 1
+          fi
+          
+          DOMAIN=$(dig +short -x "$SERVER_IP" 2>/dev/null | sed 's/\.$//' || echo "")
+          if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "NXDOMAIN" ]; then
+            echo "Предупреждение: не удалось определить домен, используем IP: $SERVER_IP"
+            DOMAIN="$SERVER_IP"
+          fi
+          
+          echo "Определен домен: $DOMAIN"
+          echo "$DOMAIN" > /shared/domain.txt
+          
+          # Если домен - IP, пропускаем certbot
+          if echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+            echo "Домен является IP, пропускаем certbot"
+            exit 0
+          fi
+          
+          # Получаем сертификат
+          CERTBOT_EMAIL="{{ .Values.domain.certbotEmail | default "admin@example.com" }}"
+          if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$CERTBOT_EMAIL" || true
+          fi
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        - name: letsencrypt
+          mountPath: /etc/letsencrypt
+      - name: generate-nginx-config
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache gettext
+          DOMAIN=$(cat /shared/domain.txt)
+          envsubst '$$DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+          echo "Сгенерирован nginx.conf для домена: $DOMAIN"
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf.template
+          subPath: nginx.conf.template
+        - name: nginx-config-generated
+          mountPath: /etc/nginx
+        - name: shared
+          mountPath: /shared
+      {{- end }}
+      containers:
+      - name: nginx
+        image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
+        imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        - name: https
+          containerPort: 443
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config-generated
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: letsencrypt
+          mountPath: /etc/letsencrypt
+          readOnly: true
+        resources:
+          {{- toYaml .Values.nginx.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: {{ include "gestalt.fullname" . }}-nginx-config
+      - name: nginx-config-generated
+        emptyDir: {}
+      - name: letsencrypt
+        emptyDir: {}
+      {{- if .Values.domain.autoDetect }}
+      - name: shared
+        emptyDir: {}
+      {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gestalt.fullname" . }}-nginx
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+spec:
+  type: {{ .Values.nginx.service.type }}
+  ports:
+  - port: {{ .Values.nginx.service.httpPort }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: {{ .Values.nginx.service.httpsPort }}
+    targetPort: https
+    protocol: TCP
+    name: https
+  selector:
+    {{- include "gestalt.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gestalt.fullname" . }}-nginx-config
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+data:
+  nginx.conf.template: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        # Редирект с HTTP на HTTPS
+        server {
+            listen 80;
+            server_name ${DOMAIN};
+
+            # Для верификации Yandex
+            location /yandex_2643153d86de9bb9.html {
+                root /var/www/html;
+            }
+
+            # Редирект на HTTPS
+            location / {
+                return 301 https://$host$request_uri;
+            }
+
+            # Для certbot
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+        }
+
+        # HTTPS сервер
+        server {
+            listen 443 ssl http2;
+            server_name ${DOMAIN};
+
+            # SSL сертификаты
+            ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+            # SSL настройки
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_prefer_server_ciphers off;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+
+            # Для верификации Yandex
+            location /yandex_2643153d86de9bb9.html {
+                root /var/www/html;
+            }
+
+            # Проксирование на alice (Python Flask)
+            location /alice/ {
+                proxy_pass http://{{ include "gestalt.fullname" . }}-alice:2112/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_cache_bypass $http_upgrade;
+            }
+
+            # Проксирование на основное приложение (Go)
+            location / {
+                proxy_pass http://{{ include "gestalt.fullname" . }}-geshtalt:8080;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_cache_bypass $http_upgrade;
+            }
+        }
+    }
+{{- end }}
+

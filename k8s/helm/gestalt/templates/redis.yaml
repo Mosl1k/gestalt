@@ -1,0 +1,126 @@
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "gestalt.fullname" . }}-redis
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "gestalt.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gestalt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "gestalt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: redis
+        image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+        imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+        command:
+        - sh
+        - -c
+        - |
+          REDIS_PASS=$(echo "$REDIS_PASSWORD" | tr -d '"')
+          sed "s|{{REDIS_PASSWORD}}|$REDIS_PASS|" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf
+          redis-server /usr/local/etc/redis/redis.conf
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gestalt.fullname" . }}-secrets
+              key: REDIS_PASSWORD
+        - name: REDIS_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "gestalt.fullname" . }}-config
+              key: REDIS_ADDR
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /usr/local/etc/redis/redis.conf.template
+          subPath: redis.conf
+        resources:
+          {{- toYaml .Values.redis.resources | nindent 10 }}
+        livenessProbe:
+          tcpSocket:
+            port: redis
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: redis
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-config
+        configMap:
+          name: {{ include "gestalt.fullname" . }}-redis-config
+  volumeClaimTemplates:
+  {{- if .Values.redis.persistence.enabled }}
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      {{- if .Values.redis.persistence.storageClass }}
+      storageClassName: {{ .Values.redis.persistence.storageClass }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.redis.persistence.size }}
+  {{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gestalt.fullname" . }}-redis
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: redis
+    protocol: TCP
+    name: redis
+  selector:
+    {{- include "gestalt.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gestalt.fullname" . }}-redis-config
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+data:
+  redis.conf: |
+    port 6379
+    bind 0.0.0.0
+    protected-mode yes
+    requirepass {{REDIS_PASSWORD}}
+    save 900 1
+    save 300 10
+    save 60 10000
+    dir /data
+    appendonly yes
+    appendfsync everysec
+{{- end }}
+

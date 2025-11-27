@@ -1,0 +1,173 @@
+# Default values for gestalt
+# This is a YAML-formatted file.
+# Override these values in values-production.yaml or via --set flags
+
+replicaCount: 1
+
+imageRegistry: ""
+imagePullPolicy: IfNotPresent
+
+# Release name (used for service names)
+nameOverride: ""
+fullnameOverride: "gestalt"
+
+# Redis configuration
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: "" # Use default storage class
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  password: "" # Set via Secret
+
+# Geshtalt (Go backend) configuration
+geshtalt:
+  enabled: true
+  image:
+    repository: ghcr.io/Mosl1k/gestalt
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  replicas: 1
+
+# Alice (Python Flask) configuration
+alice:
+  enabled: true
+  image:
+    repository: ghcr.io/Mosl1k/gestalt-alice
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 2112
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  replicas: 1
+
+# Telegram Bot configuration
+telegramBot:
+  enabled: true
+  image:
+    repository: ghcr.io/Mosl1k/gestalt-telegram-bot
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  replicas: 1
+
+# Nginx configuration
+nginx:
+  enabled: true
+  image:
+    repository: ghcr.io/Mosl1k/gestalt-nginx
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    httpPort: 80
+    httpsPort: 443
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  replicas: 1
+
+# Ingress configuration (alternative to nginx service)
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: ""  # Будет заполнено из domain.name
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: gestalt-tls
+      hosts:
+        - ""  # Будет заполнено из domain.name
+
+# Domain configuration
+domain:
+  # Автоматическое определение домена (через reverse DNS по IP)
+  autoDetect: true
+  # Или укажите домен вручную (если autoDetect: false)
+  name: ""
+  # Email для Let's Encrypt
+  certbotEmail: ""
+
+# ConfigMap values (non-sensitive)
+config:
+  redisAddr: "redis:6379"
+  apiUrl: "http://geshtalt:8080/internal/api"
+  # yandexCallbackUrl будет сгенерирован автоматически на основе domain.name
+
+# Secret values (sensitive - set via GitHub Secrets or external-secrets)
+secrets:
+  redisPassword: ""
+  sessionSecret: ""
+  yandexClientId: ""
+  yandexClientSecret: ""
+  telegramToken: ""
+  serviceUserId: ""
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 1000
+
+# Security context
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+
+# Node selector, tolerations and affinity
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+

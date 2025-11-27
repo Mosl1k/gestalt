@@ -14,9 +14,10 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Загружаем переменные из .env (если файл существует)
-# В Docker контейнере переменные передаются через env_file в docker-compose
-load_dotenv(override=False)  # override=False - не перезаписывать существующие переменные окружения
+# Загружаем переменные из .env (только для локальной разработки)
+# В Kubernetes/Docker переменные передаются через Secrets/ConfigMaps
+if not os.getenv("KUBERNETES_SERVICE_HOST"):
+    load_dotenv(override=False)  # override=False - не перезаписывать существующие переменные окружения
 
 # Конфигурация из переменных окружения
 # В Docker переменные передаются через env_file, в локальной разработке - через .env
@@ -557,16 +558,16 @@ async def show_list(update: Update, context, list_type):
 def main():
     """Запуск бота."""
     if not TELEGRAM_TOKEN:
-        logging.error("Ошибка: TELEGRAM_TOKEN не указан в .env")
-        print("Ошибка: TELEGRAM_TOKEN не указан в .env")
+        logging.error("Ошибка: TELEGRAM_TOKEN не указан в переменных окружения")
+        print("Ошибка: TELEGRAM_TOKEN не указан в переменных окружения")
         return
     if not API_URL:
-        logging.error("Ошибка: API_URL не указан в .env")
-        print("Ошибка: API_URL не указан в .env")
+        logging.error("Ошибка: API_URL не указан в переменных окружения")
+        print("Ошибка: API_URL не указан в переменных окружения")
         return
     if not SERVICE_USER_ID:
-        logging.warning("Предупреждение: SERVICE_USER_ID не указан в .env, будет использован дефолтный пользователь")
-        print("Предупреждение: SERVICE_USER_ID не указан в .env, будет использован дефолтный пользователь")
+        logging.warning("Предупреждение: SERVICE_USER_ID не указан, будет использован дефолтный пользователь")
+        print("Предупреждение: SERVICE_USER_ID не указан, будет использован дефолтный пользователь")
 
     application = Application.builder().token(TELEGRAM_TOKEN).build()
 

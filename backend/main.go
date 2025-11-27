@@ -33,8 +33,11 @@ var (
 )
 
 func init() {
-	// Загружаем переменные окружения из .env файла
-	godotenv.Load()
+	// Загружаем переменные окружения из .env файла (только для локальной разработки)
+	// В production переменные должны быть установлены через Kubernetes Secrets/ConfigMaps
+	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
+		godotenv.Load()
+	}
 
 	// Получаем секретный ключ из переменных окружения
 	sessionSecret := os.Getenv("SESSION_SECRET")
@@ -62,7 +65,7 @@ func init() {
 
 	if clientID != "" && clientSecret != "" {
 		if callbackURL == "" {
-			callbackURL = "https://kpalch.ru/auth/yandex/callback"
+			log.Println("Предупреждение: YANDEX_CALLBACK_URL не установлен. OAuth может не работать.")
 		}
 		goth.UseProviders(
 			yandex.New(clientID, clientSecret, callbackURL),

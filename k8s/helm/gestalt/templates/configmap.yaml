@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gestalt.fullname" . }}-config
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+data:
+  REDIS_ADDR: {{ .Values.config.redisAddr | quote }}
+  API_URL: {{ .Values.config.apiUrl | quote }}
+  {{- if .Values.domain.autoDetect }}
+  YANDEX_CALLBACK_URL: "https://$(DOMAIN)/auth/yandex/callback"
+  DOMAIN: ""  # Будет заполнено init-контейнером или Job
+  {{- else }}
+  YANDEX_CALLBACK_URL: {{ printf "https://%s/auth/yandex/callback" .Values.domain.name | quote }}
+  DOMAIN: {{ .Values.domain.name | quote }}
+  {{- end }}
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+
