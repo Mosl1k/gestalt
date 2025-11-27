@@ -279,7 +279,13 @@ async def change_category_to(update: Update, context):
             await query.message.reply_text(error_msg)
             return
 
-        items = response.json()
+        try:
+            items = response.json()
+        except json.JSONDecodeError as e:
+            error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
+            logging.error(error_msg)
+            await query.message.reply_text(f"Ошибка подключения к API: {e}")
+            return
         item = next((i for i in items if i["name"] == item_name), None)
         if not item:
             await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[old_category]}")
@@ -341,7 +347,13 @@ async def change_priority_to(update: Update, context):
             await query.message.reply_text(error_msg)
             return
 
-        items = response.json()
+        try:
+            items = response.json()
+        except json.JSONDecodeError as e:
+            error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
+            logging.error(error_msg)
+            await query.message.reply_text(f"Ошибка подключения к API: {e}")
+            return
         item = next((i for i in items if i["name"] == item_name), None)
         if not item:
             await query.message.reply_text(f"Элемент '{item_name}' не найден в {LISTS[category]}")
@@ -389,7 +401,13 @@ async def suggest_dishes(update: Update, context):
             await query.message.reply_text(error_msg)
             return
 
-        items = response.json()
+        try:
+            items = response.json()
+        except json.JSONDecodeError as e:
+            error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
+            logging.error(error_msg)
+            await query.message.reply_text(f"Ошибка подключения к API: {e}")
+            return
         items_in_fridge = [item['name'] for item in items if item.get('category', '').lower() == 'холодос' and item['name'].strip()]
         
         if not items_in_fridge:
