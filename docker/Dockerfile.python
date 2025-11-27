@@ -5,13 +5,13 @@ FROM python:3.9
 WORKDIR /app
 
 # Копируем requirements.txt в контейнер
-COPY requirements.txt .
+COPY services/alice/requirements.txt .
 
 # Устанавливаем зависимости
 RUN pip install -r requirements.txt
 
-# Копируем все файлы проекта в контейнер
-COPY . .
+# Копируем файлы сервиса Алисы
+COPY services/alice/alice.py .
 
 # Команда для запуска приложения Flask
 CMD ["python", "alice.py"]

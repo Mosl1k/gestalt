@@ -81,10 +81,14 @@ def get_item_actions_keyboard(item_name, category):
 async def start(update: Update, context):
     """Обработчик команды /start. Показывает основную клавиатуру."""
     reply_markup = get_main_keyboard()
-    if isinstance(update, Update) and update.message:
+    if update.message:
         await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
-    else:
-        await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
+    elif update.callback_query:
+        try:
+            await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
+        except Exception:
+            # Если не удалось отредактировать, отправляем новое сообщение
+            await update.callback_query.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
 
 async def add_start(update: Update, context):
     """Обработчик кнопки Добавить. Запрашивает текст элемента."""
@@ -441,8 +445,8 @@ async def button_callback(update: Update, context):
         await change_priority_to(update, context)
         return
     if data.startswith("back:"):
-        list_type = data.split(":")[1]
-        await show_list(update, context, list_type)
+        # Кнопка "Назад" возвращает в главное меню
+        await start(update, context)
         return
     if data.startswith("list:"):
         list_type = data.split(":")[1]
@@ -452,7 +456,8 @@ async def button_callback(update: Update, context):
 async def show_list(update: Update, context, list_type):
     """Показывает содержимое указанного списка."""
     if list_type not in LISTS:
-        await update.callback_query.message.reply_text(f"Неизвестная категория: {list_type}")
+        if update.callback_query:
+            await update.callback_query.message.reply_text(f"Неизвестная категория: {list_type}")
         return
 
     try:
@@ -464,14 +469,16 @@ async def show_list(update: Update, context, list_type):
         if response.status_code != 200:
             error_msg = f"Ошибка API: {response.status_code} - {response.text}"
             logging.error(error_msg)
-            await update.callback_query.message.reply_text(error_msg)
+            if update.callback_query:
+                await update.callback_query.message.reply_text(error_msg)
             return
 
         items = response.json()
         if not items:
             response_text = f"{LISTS[list_type]} пуст."
             reply_markup = get_list_keyboard(list_type)
-            await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
+            if update.callback_query:
+                await update.callback_query.message.edit_text(response_text, reply_markup=reply_markup)
             return
 
         response_text = f"{LISTS[list_type]}:\n"
@@ -491,7 +498,14 @@ async def show_list(update: Update, context, list_type):
         keyboard.append([])
         keyboard.extend(get_list_keyboard(list_type).inline_keyboard)
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
+        
+        # Редактируем сообщение вместо создания нового
+        if update.callback_query:
+            try:
+                await update.callback_query.message.edit_text(response_text, reply_markup=reply_markup)
+            except Exception as e:
+                # Если не удалось отредактировать (например, текст не изменился), отправляем новое сообщение
+                await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
     except requests.RequestException as e:
         error_msg = f"Ошибка подключения к API: {e}"
         logging.error(error_msg)

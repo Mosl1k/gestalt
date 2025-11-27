@@ -80,31 +80,40 @@ func internalNetworkMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Получаем IP адрес клиента
 		clientIP := r.RemoteAddr
+		// Убираем порт из IP адреса
+		if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+			clientIP = clientIP[:idx]
+		}
+		// Убираем квадратные скобки для IPv6
+		clientIP = strings.Trim(clientIP, "[]")
+		
 		// Проверяем X-Forwarded-For заголовок (если есть прокси)
 		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			clientIP = strings.Split(forwarded, ",")[0]
+			clientIP = strings.TrimSpace(strings.Split(forwarded, ",")[0])
 		}
 		
-		// Разрешаем доступ только из Docker сети (172.x.x.x, 10.x.x.x, 192.168.x.x)
-		// или из localhost
+		// Разрешаем доступ только из Docker сети
+		// Docker использует подсети: 172.16.0.0/12, 10.0.0.0/8, 192.168.0.0/16
 		allowed := false
+		
+		// Проверка по IP адресу
 		if strings.HasPrefix(clientIP, "172.") ||
 			strings.HasPrefix(clientIP, "10.") ||
 			strings.HasPrefix(clientIP, "192.168.") ||
-			strings.HasPrefix(clientIP, "127.0.0.1") ||
-			strings.HasPrefix(clientIP, "[::1]") ||
-			strings.Contains(clientIP, "alice") ||
-			strings.Contains(clientIP, "telegram-bot") {
+			clientIP == "127.0.0.1" ||
+			clientIP == "::1" ||
+			clientIP == "localhost" {
 			allowed = true
 		}
 		
-		// Также проверяем по имени хоста в Docker сети
-		host := r.Host
-		if strings.Contains(host, "alice") || strings.Contains(host, "telegram-bot") {
+		// Если не разрешено, проверяем по заголовку (для дополнительной безопасности можно использовать)
+		// В Docker сети можно использовать специальный заголовок
+		if !allowed && r.Header.Get("X-Internal-Request") == "true" {
 			allowed = true
 		}
 		
 		if !allowed {
+			log.Printf("Запрещен доступ к внутреннему API с IP: %s", clientIP)
 			http.Error(w, "Forbidden: Internal API access only", http.StatusForbidden)
 			return
 		}
@@ -364,7 +373,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Пользователь авторизован - показываем основное приложение
-	htmlFile, err := os.Open("index.html")
+	htmlFile, err := os.Open("/app/index.html")
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Println("Error opening HTML file:", err)
