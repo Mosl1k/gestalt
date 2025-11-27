@@ -38,7 +38,28 @@ go mod tidy
 go mod download
 ```
 
-### 4. Обновление .env файла
+### 4. Синхронизация с GitHub
+
+Если на сервере есть локальные изменения, которые нужно сохранить (например, `backup_redis.sh`, `setup-server.sh`), сделайте их бэкап перед обновлением:
+
+```bash
+# На сервере
+cd ~/gestalt
+
+# Сохраните локальные файлы, если они нужны
+cp backup_redis.sh backup_redis.sh.local
+cp setup-server.sh setup-server.sh.local 2>/dev/null || true
+
+# Получите последние изменения из GitHub
+git fetch origin
+git pull origin main
+
+# Если были конфликты, разрешите их
+# Восстановите локальные файлы, если нужно
+cp backup_redis.sh.local backup_redis.sh 2>/dev/null || true
+```
+
+### 5. Обновление .env файла
 
 Добавьте в `.env` на сервере следующие переменные:
 
@@ -126,6 +147,24 @@ crontab -e
 # Добавьте строку (обновление сертификата раз в неделю)
 0 3 * * 0 docker exec nginx /usr/local/bin/renew-cert.sh
 ```
+
+### 12. Настройка бэкапов Redis в Яндекс Облако
+
+Если у вас настроено монтирование Яндекс Облако через WebDAV в `/mnt/yandex`:
+
+```bash
+# На сервере
+# Убедитесь, что скрипт backup_redis.sh существует и исполняемый
+chmod +x ~/gestalt/backup_redis.sh
+
+# Добавьте в crontab (бэкап каждый день в 2:00)
+crontab -e
+
+# Добавьте строку:
+0 2 * * * /bin/bash /root/gestalt/backup_redis.sh >> /mnt/yandex/backup/backup.log 2>&1
+```
+
+**Важно**: Скрипт `backup_redis.sh` не должен попадать в git (он уже в `.gitignore`), так как содержит специфичные для сервера пути (`/mnt/yandex/backup`).
 
 ## Откат изменений (если что-то пошло не так)
 
