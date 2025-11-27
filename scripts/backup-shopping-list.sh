@@ -19,40 +19,83 @@ fi
 mkdir -p "$BACKUP_DIR"
 
 # Получаем переменные окружения из .env или из системы
-if [ -f "/root/gestalt/.env" ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -f "$PROJECT_DIR/.env" ]; then
+    source "$PROJECT_DIR/.env"
+elif [ -f "/root/gestalt/.env" ]; then
     source /root/gestalt/.env
 elif [ -f ".env" ]; then
     source .env
 fi
 
-# Параметры подключения к Redis
-REDIS_HOST="${REDIS_HOST:-redis}"
-REDIS_PORT="${REDIS_PORT:-6379}"
-REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+# Определяем способ подключения к Redis (Docker или прямой)
+REDIS_CONTAINER="redis"
+USE_DOCKER=false
+
+# Проверяем, запущен ли Redis в Docker
+if docker ps --format '{{.Names}}' | grep -q "^${REDIS_CONTAINER}$"; then
+    USE_DOCKER=true
+    echo "Используется Docker контейнер: $REDIS_CONTAINER"
+fi
 
 # Функция для получения данных из Redis
 get_redis_data() {
     local key=$1
-    if [ -n "$REDIS_PASSWORD" ]; then
-        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" GET "$key" 2>/dev/null || echo ""
+    if [ "$USE_DOCKER" = true ]; then
+        # Через Docker контейнер
+        if [ -n "$REDIS_PASSWORD" ]; then
+            docker exec "$REDIS_CONTAINER" redis-cli -a "$REDIS_PASSWORD" GET "$key" 2>/dev/null || echo ""
+        else
+            docker exec "$REDIS_CONTAINER" redis-cli GET "$key" 2>/dev/null || echo ""
+        fi
     else
-        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" GET "$key" 2>/dev/null || echo ""
+        # Прямое подключение
+        REDIS_HOST="${REDIS_HOST:-localhost}"
+        REDIS_PORT="${REDIS_PORT:-6379}"
+        if [ -n "$REDIS_PASSWORD" ]; then
+            redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" GET "$key" 2>/dev/null || echo ""
+        else
+            redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" GET "$key" 2>/dev/null || echo ""
+        fi
     fi
 }
 
 # Функция для получения всех ключей списков
 get_all_list_keys() {
-    if [ -n "$REDIS_PASSWORD" ]; then
-        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" KEYS "shoppingList:*" 2>/dev/null || echo ""
+    if [ "$USE_DOCKER" = true ]; then
+        # Через Docker контейнер
+        if [ -n "$REDIS_PASSWORD" ]; then
+            docker exec "$REDIS_CONTAINER" redis-cli -a "$REDIS_PASSWORD" KEYS "shoppingList:*" 2>/dev/null || echo ""
+        else
+            docker exec "$REDIS_CONTAINER" redis-cli KEYS "shoppingList:*" 2>/dev/null || echo ""
+        fi
     else
-        redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" KEYS "shoppingList:*" 2>/dev/null || echo ""
+        # Прямое подключение
+        REDIS_HOST="${REDIS_HOST:-localhost}"
+        REDIS_PORT="${REDIS_PORT:-6379}"
+        if [ -n "$REDIS_PASSWORD" ]; then
+            redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" KEYS "shoppingList:*" 2>/dev/null || echo ""
+        else
+            redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" KEYS "shoppingList:*" 2>/dev/null || echo ""
+        fi
     fi
 }
 
 # Проверяем доступность Redis
-if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} PING >/dev/null 2>&1; then
-    echo "Ошибка: не удалось подключиться к Redis ($REDIS_HOST:$REDIS_PORT)"
-    exit 1
+if [ "$USE_DOCKER" = true ]; then
+    if ! docker exec "$REDIS_CONTAINER" redis-cli ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} PING >/dev/null 2>&1; then
+        echo "Ошибка: не удалось подключиться к Redis в контейнере $REDIS_CONTAINER"
+        exit 1
+    fi
+else
+    REDIS_HOST="${REDIS_HOST:-localhost}"
+    REDIS_PORT="${REDIS_PORT:-6379}"
+    if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ${REDIS_PASSWORD:+-a "$REDIS_PASSWORD"} PING >/dev/null 2>&1; then
+        echo "Ошибка: не удалось подключиться к Redis ($REDIS_HOST:$REDIS_PORT)"
+        exit 1
+    fi
 fi
 
 # Начинаем формировать файл бэкапа
