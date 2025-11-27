@@ -14,10 +14,12 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Загружаем переменные из .env
-load_dotenv()
+# Загружаем переменные из .env (если файл существует)
+# В Docker контейнере переменные передаются через env_file в docker-compose
+load_dotenv(override=False)  # override=False - не перезаписывать существующие переменные окружения
 
-# Конфигурация из .env
+# Конфигурация из переменных окружения
+# В Docker переменные передаются через env_file, в локальной разработке - через .env
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_URL = os.getenv("API_URL", "http://geshtalt:8080/internal/api")
 SERVICE_USER_ID = os.getenv("SERVICE_USER_ID", "")
