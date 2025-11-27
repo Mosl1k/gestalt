@@ -616,11 +616,11 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var oldItems []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &oldItems)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON для %s: %v, значение: %s", oldKey, err, val)
+			oldItems = []Item{} // Используем пустой список при ошибке
 		}
 	}
 
@@ -651,11 +651,11 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newItems []Item
-	if err == nil {
+	if err == nil && val != "" {
 		err = json.Unmarshal([]byte(val), &newItems)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Printf("Ошибка парсинга JSON для %s: %v, значение: %s", newKey, err, val)
+			newItems = []Item{} // Используем пустой список при ошибке
 		}
 	}
 
