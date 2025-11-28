@@ -98,7 +98,8 @@ data:
 
         # HTTPS сервер
         server {
-            listen 443 ssl http2;
+            listen 443 ssl;
+            http2 on;
             server_name {{ .Values.domain.name | default "localhost" }};
 
             # SSL сертификаты
