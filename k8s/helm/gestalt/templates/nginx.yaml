@@ -97,21 +97,16 @@ spec:
             sed -i 's/return 301 https/return 200/g' /tmp/nginx.conf.tmp
           fi
           
-          # Копируем в правильное место для монтирования
-          mkdir -p /etc/nginx
-          cp /tmp/nginx.conf.tmp /etc/nginx/nginx.conf
+          # Копируем в shared volume для передачи в основной контейнер
+          cp /tmp/nginx.conf.tmp /shared/nginx.conf
           echo "Сгенерирован nginx.conf для домена: $DOMAIN (NO_CERT=$NO_CERT)"
-          cat /etc/nginx/nginx.conf | head -20
+          cat /shared/nginx.conf | head -20
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf.template
           subPath: nginx.conf.template
-        - name: nginx-config-generated
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
         - name: shared
           mountPath: /shared
-      {{- end }}
       containers:
       - name: nginx
         image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
