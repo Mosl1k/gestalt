@@ -88,7 +88,7 @@ async def start(update: Update, context):
         await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
     elif update.callback_query:
         try:
-        await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
+            await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
         except Exception:
             # Если не удалось отредактировать, отправляем новое сообщение
             await update.callback_query.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
