@@ -37,7 +37,7 @@ geshtalt:
   image:
     repository: docker-geshtalt
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   service:
     type: ClusterIP
     port: 8080
@@ -56,7 +56,7 @@ alice:
   image:
     repository: docker-alice
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   service:
     type: ClusterIP
     port: 2112
@@ -75,7 +75,7 @@ telegramBot:
   image:
     repository: docker-telegram-bot
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   resources:
     requests:
       memory: "128Mi"
@@ -91,7 +91,7 @@ nginx:
   image:
     repository: docker-nginx
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   service:
     type: LoadBalancer
     httpPort: 80
