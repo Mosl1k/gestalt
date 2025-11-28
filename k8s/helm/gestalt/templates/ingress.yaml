@@ -8,6 +8,8 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    # Заголовки безопасности
+    traefik.ingress.kubernetes.io/router.middlewares: default-headers@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
@@ -18,12 +20,23 @@ spec:
   - host: {{ .Values.domain.name | default "localhost" }}
     http:
       paths:
+      # Alice service на /alice/
+      {{- if .Values.alice.enabled }}
+      - path: /alice
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "gestalt.fullname" . }}-alice
+            port:
+              number: 2112
+      {{- end }}
+      # Основное приложение (Go backend)
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: {{ include "gestalt.fullname" . }}-nginx
+            name: {{ include "gestalt.fullname" . }}-geshtalt
             port:
-              number: 80
+              number: 8080
 {{- end }}
 
