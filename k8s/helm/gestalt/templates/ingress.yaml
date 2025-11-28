@@ -6,8 +6,10 @@ metadata:
   labels:
     {{- include "gestalt.labels" . | nindent 4 }}
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    # Редирект с HTTP на HTTPS
+    traefik.ingress.kubernetes.io/router.middlewares: default-redirectscheme@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
