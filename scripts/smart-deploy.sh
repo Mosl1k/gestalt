@@ -47,6 +47,12 @@ fi
 cd "$(dirname "$0")/.."
 PROJECT_ROOT=$(pwd)
 
+# Загружаем секреты из GitHub Secrets или .env
+if [ -f "$PROJECT_ROOT/scripts/load-secrets.sh" ]; then
+    info "Загрузка секретов..."
+    "$PROJECT_ROOT/scripts/load-secrets.sh" || warn "Не удалось загрузить секреты, используем существующий .env"
+fi
+
 info "Умный деплой Gestalt"
 info "Сравнение с: $BASE_BRANCH"
 echo ""
