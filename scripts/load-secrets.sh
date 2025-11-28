@@ -67,7 +67,11 @@ OPTIONAL_SECRETS=(
 get_github_secret() {
     local secret_name=$1
     if [ "$USE_GITHUB_SECRETS" = true ]; then
-        gh secret get "$secret_name" --repo "$GITHUB_REPO" 2>/dev/null || echo ""
+        # GitHub CLI может получить секреты только через Actions
+        # Для получения секретов репозитория используем другой подход
+        # Пока что возвращаем пустую строку, так как gh secret get работает только для Actions secrets
+        # В будущем можно использовать GitHub API с токеном
+        echo ""
     else
         echo ""
     fi
@@ -90,15 +94,36 @@ info "Загрузка секретов..."
 # Сохраняем существующий .env для чтения (если есть)
 EXISTING_ENV_FILE="$ENV_FILE"
 if [ -f "$ENV_FILE" ]; then
-    # Создаем резервную копию
-    cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
-    info "Создана резервная копия .env файла"
+    # Проверяем, есть ли в существующем .env все необходимые переменные
+    ALL_PRESENT=true
+    for secret in "${REQUIRED_SECRETS[@]}"; do
+        if ! grep -q "^${secret}=" "$ENV_FILE"; then
+            ALL_PRESENT=false
+            break
+        fi
+    done
+    
+    if [ "$ALL_PRESENT" = true ]; then
+        info "Все необходимые переменные уже присутствуют в .env файле"
+        info "Используем существующий .env файл (GitHub Secrets будут использованы только если доступны)"
+        # Не перезаписываем .env, если все переменные уже есть
+        # Но все равно пытаемся обновить из GitHub Secrets
+        USE_EXISTING=true
+    else
+        # Создаем резервную копию
+        cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+        info "Создана резервная копия .env файла"
+        USE_EXISTING=false
+    fi
 else
     EXISTING_ENV_FILE=""
+    USE_EXISTING=false
 fi
 
-# Создаем новый .env файл
-> "$ENV_FILE"
+# Создаем новый .env файл только если не используем существующий
+if [ "$USE_EXISTING" != true ]; then
+    > "$ENV_FILE"
+fi
 
 # Загружаем обязательные секреты
 MISSING_SECRETS=()
@@ -123,13 +148,29 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
     
     # Если все еще нет значения
     if [ -z "$value" ]; then
-        warn "Секрет $secret не найден ни в GitHub Secrets, ни в .env файле"
-        MISSING_SECRETS+=("$secret")
-        continue
+        # Если используем существующий .env и переменная там есть, берем оттуда
+        if [ "$USE_EXISTING" = true ] && grep -q "^${secret}=" "$EXISTING_ENV_FILE"; then
+            value=$(get_env_value "$secret" "$EXISTING_ENV_FILE")
+            if [ -n "$value" ]; then
+                debug "Секрет $secret сохранен из существующего .env файла"
+            fi
+        fi
+        
+        if [ -z "$value" ]; then
+            warn "Секрет $secret не найден ни в GitHub Secrets, ни в .env файле"
+            MISSING_SECRETS+=("$secret")
+            continue
+        fi
     fi
     
-    # Записываем в .env файл
-    echo "${secret}=${value}" >> "$ENV_FILE"
+    # Записываем в .env файл только если не используем существующий или значение изменилось
+    if [ "$USE_EXISTING" != true ] || ! grep -q "^${secret}=${value}$" "$ENV_FILE" 2>/dev/null; then
+        # Удаляем старую строку если есть
+        if [ "$USE_EXISTING" = true ]; then
+            sed -i "/^${secret}=/d" "$ENV_FILE"
+        fi
+        echo "${secret}=${value}" >> "$ENV_FILE"
+    fi
 done
 
 # Загружаем опциональные секреты
