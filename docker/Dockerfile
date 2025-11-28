@@ -11,6 +11,9 @@ RUN go mod download
 # Копируем main.go
 COPY backend/main.go ./
 
+# Обновляем go.sum если нужно (быстро, т.к. зависимости уже загружены)
+RUN go mod tidy
+
 # Компилируем приложение (используем кэш зависимостей из предыдущего шага)
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o gestalt ./main.go
 
