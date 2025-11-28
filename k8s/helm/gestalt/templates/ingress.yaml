@@ -8,8 +8,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: default-headers@kubernetescrd
-    # Используем сертификаты Let's Encrypt с хоста
+    # Используем сертификаты Let's Encrypt из Secret
     traefik.ingress.kubernetes.io/router.tls.certresolver: ""
 spec:
   ingressClassName: traefik
