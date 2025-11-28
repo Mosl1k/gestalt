@@ -117,6 +117,15 @@ spec:
       - name: nginx
         image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
         imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Копируем сгенерированную конфигурацию из shared volume
+          cp /shared/nginx.conf /etc/nginx/nginx.conf
+          echo "Конфигурация nginx скопирована"
+          nginx -t
+          exec nginx -g 'daemon off;'
         ports:
         - name: http
           containerPort: 80
@@ -126,7 +135,10 @@ spec:
           protocol: TCP
         volumeMounts:
         - name: nginx-config-generated
-          mountPath: /etc/nginx
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: shared
+          mountPath: /shared
         - name: letsencrypt
           mountPath: /etc/letsencrypt
           readOnly: true
@@ -154,10 +166,8 @@ spec:
         hostPath:
           path: /etc/letsencrypt
           type: Directory
-      {{- if .Values.domain.autoDetect }}
       - name: shared
         emptyDir: {}
-      {{- end }}
 
 ---
 apiVersion: v1
