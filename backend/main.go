@@ -204,11 +204,18 @@ func main() {
 // Middleware для проверки авторизации через Yandex OAuth
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Пропускаем публичные маршруты
+		if r.URL.Path == "/" || r.URL.Path == "/auth/yandex" || r.URL.Path == "/auth/yandex/callback" || r.URL.Path == "/logout" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		
 		session, _ := store.Get(r, "session")
 
 		// Проверяем, авторизован ли пользователь
 		userID, ok := session.Values["user_id"].(string)
 		if !ok || userID == "" {
+			log.Printf("Пользователь не авторизован для %s. Cookies: %v", r.URL.Path, r.Header.Get("Cookie"))
 			// Пользователь не авторизован - перенаправляем на страницу авторизации
 			http.Redirect(w, r, "/auth/yandex", http.StatusFound)
 			return
