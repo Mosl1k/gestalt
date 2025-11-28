@@ -61,7 +61,7 @@ spec:
           fi
           
           # Получаем сертификат только для валидных доменов
-          CERTBOT_EMAIL="{{ .Values.domain.certbotEmail | default "admin@example.com" }}"
+          CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@${DOMAIN}}"
           mkdir -p /etc/letsencrypt/live/${DOMAIN} 2>/dev/null || true
           if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
             certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$CERTBOT_EMAIL" --config-dir /etc/letsencrypt --work-dir /tmp/certbot-work --logs-dir /tmp/certbot-logs || true
@@ -74,6 +74,8 @@ spec:
               name: {{ include "gestalt.fullname" . }}-secrets
               key: DOMAIN
               optional: true
+        - name: CERTBOT_EMAIL
+          value: {{ .Values.domain.certbotEmail | default "" | quote }}
         volumeMounts:
         - name: shared
           mountPath: /shared
