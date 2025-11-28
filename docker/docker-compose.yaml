@@ -35,8 +35,9 @@ services:
     container_name: alice
     env_file:
       - ../.env
-    ports:
-      - "2112:2112"
+    # Порт не пробрасываем наружу - доступ только через Nginx
+    # ports:
+    #   - "2112:2112"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
     depends_on:
