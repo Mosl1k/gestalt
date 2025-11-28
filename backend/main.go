@@ -54,7 +54,7 @@ func init() {
 		MaxAge:   86400 * 30, // 30 дней
 		HttpOnly: true,
 		Secure:   true, // true для HTTPS
-		SameSite: http.SameSiteLaxMode, // Защита от CSRF
+		SameSite: http.SameSiteLaxMode, // Lax для работы через proxy
 		// Domain не указываем, чтобы cookies работали через nginx proxy
 	}
 
