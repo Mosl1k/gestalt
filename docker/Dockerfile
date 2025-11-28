@@ -2,20 +2,34 @@ FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
+# Настраиваем кэширование модулей Go через BuildKit cache mount
+# Это позволяет кэшировать модули между сборками
+ENV GOMODCACHE=/go/pkg/mod
+ENV GOCACHE=/go/cache
+
 # Копируем go.mod и go.sum первыми для кэширования зависимостей
 COPY backend/go.mod backend/go.sum ./
 
-# Загружаем зависимости (кэшируется если go.mod/go.sum не изменились)
-RUN go mod download
+# Загружаем зависимости с использованием cache mount
+# Модули будут кэшироваться между сборками, даже если контейнер пересоздается
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/go/cache \
+    go mod download
 
 # Копируем main.go
 COPY backend/main.go ./
 
 # Обновляем go.sum если нужно (быстро, т.к. зависимости уже загружены)
-RUN go mod tidy
+# Используем cache mount для ускорения
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/go/cache \
+    go mod tidy
 
-# Компилируем приложение (используем кэш зависимостей из предыдущего шага)
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o gestalt ./main.go
+# Компилируем приложение с использованием cache mount
+# Это ускорит компиляцию при повторных сборках
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/go/cache \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o gestalt ./main.go
 
 # Финальный образ
 FROM alpine:latest
