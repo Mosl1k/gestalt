@@ -30,7 +30,7 @@ spec:
         - -c
         - |
           REDIS_PASS=$(echo "$REDIS_PASSWORD" | tr -d '"')
-          sed "s|{{REDIS_PASSWORD}}|$REDIS_PASS|" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf
+          sed "s|{{ "{{REDIS_PASSWORD}}" }}|$REDIS_PASS|" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf
           redis-server /usr/local/etc/redis/redis.conf
         ports:
         - name: redis
@@ -115,7 +115,7 @@ data:
     port 6379
     bind 0.0.0.0
     protected-mode yes
-    requirepass {{REDIS_PASSWORD}}
+    requirepass {{ "{{REDIS_PASSWORD}}" }}
     # Сохраняем реже, так как бэкап делается в Яндекс.Облако отдельно
     save 900 1
     save 300 10
