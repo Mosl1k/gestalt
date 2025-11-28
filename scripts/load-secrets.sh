@@ -76,8 +76,9 @@ get_github_secret() {
 # Функция для получения значения из .env файла
 get_env_value() {
     local key=$1
-    if [ -f "$ENV_FILE" ]; then
-        grep "^${key}=" "$ENV_FILE" | cut -d '=' -f2- | sed 's/^"//;s/"$//' || echo ""
+    local file_to_read="${2:-$EXISTING_ENV_FILE}"
+    if [ -n "$file_to_read" ] && [ -f "$file_to_read" ]; then
+        grep "^${key}=" "$file_to_read" | cut -d '=' -f2- | sed 's/^"//;s/"$//' || echo ""
     else
         echo ""
     fi
@@ -86,10 +87,14 @@ get_env_value() {
 # Создаем или обновляем .env файл
 info "Загрузка секретов..."
 
-# Создаем резервную копию существующего .env, если он есть
+# Сохраняем существующий .env для чтения (если есть)
+EXISTING_ENV_FILE="$ENV_FILE"
 if [ -f "$ENV_FILE" ]; then
+    # Создаем резервную копию
     cp "$ENV_FILE" "${ENV_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
     info "Создана резервная копия .env файла"
+else
+    EXISTING_ENV_FILE=""
 fi
 
 # Создаем новый .env файл
