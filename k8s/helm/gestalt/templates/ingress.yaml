@@ -8,6 +8,8 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    # Заголовки безопасности
+    traefik.ingress.kubernetes.io/router.middlewares: default-headers@kubernetescrd
 spec:
   ingressClassName: traefik
   tls:
