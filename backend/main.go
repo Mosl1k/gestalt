@@ -210,7 +210,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		userID, ok := session.Values["user_id"].(string)
 		if !ok || userID == "" {
 			// Пользователь не авторизован - перенаправляем на страницу авторизации
-			http.Redirect(w, r, "/auth/yandex", http.StatusTemporaryRedirect)
+			http.Redirect(w, r, "/auth/yandex", http.StatusFound)
 			return
 		}
 
@@ -329,7 +329,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Пользователь авторизован: %s (%s)", user.Name, user.Email)
 
 	// Перенаправляем на главную страницу
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 // Обработчик выхода
@@ -342,7 +342,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	session.Save(r, w)
 
 	// Перенаправляем на главную
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
