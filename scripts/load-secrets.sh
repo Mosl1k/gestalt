@@ -113,9 +113,9 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
         fi
     fi
     
-    # Если не получили из GitHub, берем из .env (из резервной копии или существующего)
-    if [ -z "$value" ]; then
-        value=$(get_env_value "$secret")
+    # Если не получили из GitHub, берем из существующего .env файла
+    if [ -z "$value" ] && [ -n "$EXISTING_ENV_FILE" ]; then
+        value=$(get_env_value "$secret" "$EXISTING_ENV_FILE")
         if [ -n "$value" ]; then
             debug "Секрет $secret загружен из существующего .env файла"
         fi
@@ -142,8 +142,8 @@ for secret in "${OPTIONAL_SECRETS[@]}"; do
     fi
     
     # Если не получили из GitHub, берем из существующего .env
-    if [ -z "$value" ]; then
-        value=$(get_env_value "$secret")
+    if [ -z "$value" ] && [ -n "$EXISTING_ENV_FILE" ]; then
+        value=$(get_env_value "$secret" "$EXISTING_ENV_FILE")
     fi
     
     # Если есть значение, записываем
