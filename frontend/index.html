@@ -381,27 +381,41 @@
 
         function filterCategory(category) {
             fetch(`/list?category=${encodeURIComponent(category)}`, {
-                credentials: 'include'
+                credentials: 'include',
+                redirect: 'follow' // Следуем редиректам автоматически
             })
             .then(response => {
+                // Проверяем, был ли редирект на авторизацию
+                if (response.redirected && response.url.includes('/auth/yandex')) {
+                    window.location.href = '/auth/yandex';
+                    return null;
+                }
+                
                 if (!response.ok) {
                     if (response.status === 401 || response.status === 302) {
                         // Перенаправление на авторизацию
                         window.location.href = '/auth/yandex';
-                        return;
+                        return null;
                     }
                     throw new Error('Network response was not ok');
                 }
+                
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     // Если получили HTML вместо JSON, значит нужна авторизация
-                    window.location.href = '/auth/yandex';
-                    return;
+                    // Но не делаем редирект сразу, проверяем содержимое
+                    return response.text().then(text => {
+                        if (text.includes('/auth/yandex') || text.includes('Войти через Yandex')) {
+                            window.location.href = '/auth/yandex';
+                            return null;
+                        }
+                        throw new Error('Unexpected content type');
+                    });
                 }
                 return response.json();
             })
             .then(data => {
-                if (!data) return; // Если был редирект, data будет undefined
+                if (!data) return; // Если был редирект, data будет null
                 if (!Array.isArray(data)) {
                     console.error('Expected array, got:', data);
                     data = [];
@@ -415,8 +429,9 @@
             })
             .catch(error => {
                 console.error('There was an error!', error);
-                if (error.message === 'Network response was not ok') {
-                    alert('Ошибка авторизации. Проверьте настройки сервера.');
+                // Не показываем alert при ошибках авторизации, редирект уже произошел
+                if (error.message !== 'Unexpected content type' && !error.message.includes('redirect')) {
+                    console.error('Error details:', error);
                 }
             });
         }
