@@ -171,6 +171,10 @@ backup:
   schedule: "*/20 * * * *"  # Каждые 20 минут
   yandexMountPath: "/mnt/yandex/gestalt"
 
+# Ingress configuration
+ingress:
+  enabled: true
+
 # Node selector, tolerations and affinity
 nodeSelector: {}
 
