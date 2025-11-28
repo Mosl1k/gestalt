@@ -321,7 +321,15 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	session.Values["email"] = user.Email
 	session.Values["provider"] = user.Provider
 	session.Values["user_id"] = user.UserID
-	session.Save(r, w)
+	
+	// Сохраняем сессию и проверяем на ошибки
+	if err := session.Save(r, w); err != nil {
+		log.Printf("Ошибка сохранения сессии: %v", err)
+		http.Error(w, fmt.Sprintf("Ошибка сохранения сессии: %v", err), http.StatusInternalServerError)
+		return
+	}
+	
+	log.Printf("Сессия сохранена для пользователя: %s (%s), user_id: %s", user.Name, user.Email, user.UserID)
 	
 	// Сохраняем информацию о пользователе в Redis для поиска друзей
 	saveUserToRedis(user.UserID, user.Name, user.Email)
@@ -351,6 +359,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Проверяем, авторизован ли пользователь
 	userID, ok := session.Values["user_id"].(string)
 	if !ok || userID == "" {
+		log.Printf("Пользователь не авторизован, показываем приветственную страницу. Cookies: %v", r.Header.Get("Cookie"))
 		// Пользователь не авторизован - показываем приветственную страницу
 		welcomeHTML := `
 <!DOCTYPE html>
