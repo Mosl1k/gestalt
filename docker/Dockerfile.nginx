@@ -1,7 +1,7 @@
 FROM nginx:alpine
 
-# Устанавливаем certbot
-RUN apk add --no-cache certbot certbot-nginx
+# Устанавливаем certbot и dig
+RUN apk add --no-cache certbot certbot-nginx bind-tools curl
 
 # Копируем конфигурацию nginx
 COPY infra/nginx/nginx.conf /etc/nginx/nginx.conf
@@ -16,7 +16,6 @@ RUN echo '#!/bin/sh' > /usr/local/bin/init-cert.sh && \
     echo 'fi' >> /usr/local/bin/init-cert.sh && \
     echo 'if [ -n "$DOMAIN" ] && [ ! -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ]; then' >> /usr/local/bin/init-cert.sh && \
     echo '  certbot certonly --standalone -d ${DOMAIN} --non-interactive --agree-tos --email ${CERTBOT_EMAIL:-admin@${DOMAIN}} || true' >> /usr/local/bin/init-cert.sh && \
-    echo 'fi' >> /usr/local/bin/init-cert.sh && \
     echo 'fi' >> /usr/local/bin/init-cert.sh && \
     chmod +x /usr/local/bin/init-cert.sh
 
