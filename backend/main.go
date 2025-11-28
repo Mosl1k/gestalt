@@ -311,7 +311,77 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	// Gothic сам проверяет состояние OAuth внутри CompleteUserAuth
 	user, err := gothic.CompleteUserAuth(w, r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Ошибка авторизации: %v", err), http.StatusInternalServerError)
+		log.Printf("Ошибка CompleteUserAuth: %v", err)
+		
+		// Если код истек, перенаправляем на повторную авторизацию
+		if strings.Contains(err.Error(), "invalid_grant") || strings.Contains(err.Error(), "Code has expired") {
+			log.Println("Код авторизации истек, перенаправляем на повторную авторизацию")
+			http.Redirect(w, r, "/auth/yandex", http.StatusFound)
+			return
+		}
+		
+		// Для других ошибок показываем страницу с ошибкой
+		errorHTML := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Ошибка авторизации</title>
+	<meta charset="UTF-8">
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			margin: 0;
+			background: #f5f5f5;
+		}
+		.container {
+			background: white;
+			padding: 40px;
+			border-radius: 10px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+			text-align: center;
+			max-width: 500px;
+		}
+		h1 { color: #dc3545; }
+		.error { 
+			background: #f8d7da;
+			color: #721c24;
+			padding: 15px;
+			border-radius: 5px;
+			margin: 20px 0;
+		}
+		.btn {
+			display: inline-block;
+			padding: 12px 30px;
+			background: #667eea;
+			color: white;
+			text-decoration: none;
+			border-radius: 5px;
+			font-weight: bold;
+			margin-top: 20px;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>❌ Ошибка авторизации</h1>
+		<div class="error">
+			<p><strong>Ошибка:</strong> %s</p>
+			<p>Попробуйте авторизоваться снова</p>
+		</div>
+		<a href="/auth/yandex" class="btn">Повторить авторизацию</a>
+		<a href="/" class="btn">Вернуться на главную</a>
+	</div>
+</body>
+</html>
+`, err.Error())
+		
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, errorHTML)
 		return
 	}
 
