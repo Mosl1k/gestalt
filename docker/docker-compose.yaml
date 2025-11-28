@@ -12,7 +12,7 @@ services:
     env_file: ../.env
     networks:
       - default
-    command: sh -c "REDIS_PASS=$$(echo \"$${REDIS_PASSWORD}\" | sed 's/[\"'\'']//g') && if [ -z \"$$REDIS_PASS\" ]; then echo 'ERROR: REDIS_PASSWORD is empty'; exit 1; fi && sed \"s|{{REDIS_PASSWORD}}|$$REDIS_PASS|g\" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf && redis-server /usr/local/etc/redis/redis.conf"
+    command: sh -c "REDIS_PASS=$$(echo \"$${REDIS_PASSWORD}\" | sed 's/^\"//;s/\"$$//' | sed \"s/'//g\") && if [ -z \"$$REDIS_PASS\" ]; then echo 'ERROR: REDIS_PASSWORD is empty'; exit 1; fi && sed \"s|{{REDIS_PASSWORD}}|$$REDIS_PASS|g\" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf && cat /usr/local/etc/redis/redis.conf && redis-server /usr/local/etc/redis/redis.conf"
     restart: always
 
   geshtalt:
