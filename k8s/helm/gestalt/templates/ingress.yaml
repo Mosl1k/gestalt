@@ -13,7 +13,7 @@ spec:
   tls:
   - hosts:
     - {{ .Values.domain.name | default "localhost" }}
-    secretName: {{ include "gestalt.fullname" . }}-tls-cert
+    secretName: gestalt-tls-cert
   rules:
   - host: {{ .Values.domain.name | default "localhost" }}
     http:
