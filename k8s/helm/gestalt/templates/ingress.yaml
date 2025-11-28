@@ -8,14 +8,12 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    # Используем сертификаты Let's Encrypt из Secret
-    traefik.ingress.kubernetes.io/router.tls.certresolver: ""
 spec:
   ingressClassName: traefik
   tls:
   - hosts:
     - {{ .Values.domain.name | default "localhost" }}
-    secretName: gestalt-tls-cert
+    secretName: {{ include "gestalt.fullname" . }}-tls-cert
   rules:
   - host: {{ .Values.domain.name | default "localhost" }}
     http:
