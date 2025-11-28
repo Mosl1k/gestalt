@@ -427,7 +427,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 func listHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	ctx := r.Context()
 	client := getRedisClient()
@@ -590,7 +594,11 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 
 func editHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	vars := mux.Vars(r)
 	oldName := vars["name"]
@@ -690,7 +698,11 @@ func editHandler(w http.ResponseWriter, r *http.Request) {
 
 func buyHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	vars := mux.Vars(r)
 	itemName := vars["name"]
@@ -753,7 +765,11 @@ func buyHandler(w http.ResponseWriter, r *http.Request) {
 
 func deleteHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	vars := mux.Vars(r)
 	itemName := vars["name"]
@@ -813,7 +829,11 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 
 func reorderHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	var items []Item
 	err := json.NewDecoder(r.Body).Decode(&items)
@@ -979,7 +999,11 @@ func searchUsersHandler(w http.ResponseWriter, r *http.Request) {
 // Получение списка друзей
 func getFriendsHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	ctx := context.Background()
 	client := getRedisClient()
@@ -1008,7 +1032,11 @@ func getFriendsHandler(w http.ResponseWriter, r *http.Request) {
 // Добавление друга
 func addFriendHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		FriendID string `json:"friend_id"`
@@ -1030,7 +1058,11 @@ func addFriendHandler(w http.ResponseWriter, r *http.Request) {
 // Удаление друга
 func removeFriendHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	friendID := r.URL.Query().Get("friend_id")
 	if friendID == "" {
@@ -1053,7 +1085,11 @@ func removeFriendHandler(w http.ResponseWriter, r *http.Request) {
 // Получение общих списков (списки, которыми поделились с пользователем)
 func getSharedListsHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	ctx := context.Background()
 	client := getRedisClient()
@@ -1089,7 +1125,11 @@ func getSharedListsHandler(w http.ResponseWriter, r *http.Request) {
 // Поделиться списком с другом
 func shareListHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		FriendID string `json:"friend_id"`
