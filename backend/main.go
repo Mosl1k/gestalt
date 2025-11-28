@@ -178,24 +178,23 @@ func main() {
 	internal.HandleFunc("/edit/{name}", internalEditHandler).Methods("PUT")
 
 	// Защищённые маршруты (требуют авторизации через OAuth)
-	protected := r.PathPrefix("").Subrouter()
-	protected.Use(authMiddleware)
-	protected.HandleFunc("/list", listHandler).Methods("GET")
-	protected.HandleFunc("/add", addHandler).Methods("POST")
-	protected.HandleFunc("/buy/{name}", buyHandler).Methods("PUT")
-	protected.HandleFunc("/delete/{name}", deleteHandler).Methods("DELETE")
-	protected.HandleFunc("/edit/{name}", editHandler).Methods("PUT")
-	protected.HandleFunc("/reorder", reorderHandler).Methods("POST")
+	// Регистрируем напрямую с применением middleware
+	r.HandleFunc("/list", authMiddleware(http.HandlerFunc(listHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/add", authMiddleware(http.HandlerFunc(addHandler)).ServeHTTP).Methods("POST")
+	r.HandleFunc("/buy/{name}", authMiddleware(http.HandlerFunc(buyHandler)).ServeHTTP).Methods("PUT")
+	r.HandleFunc("/delete/{name}", authMiddleware(http.HandlerFunc(deleteHandler)).ServeHTTP).Methods("DELETE")
+	r.HandleFunc("/edit/{name}", authMiddleware(http.HandlerFunc(editHandler)).ServeHTTP).Methods("PUT")
+	r.HandleFunc("/reorder", authMiddleware(http.HandlerFunc(reorderHandler)).ServeHTTP).Methods("POST")
 	
 	// API для друзей
-	protected.HandleFunc("/api/user", getCurrentUserHandler).Methods("GET")
-	protected.HandleFunc("/api/users/search", searchUsersHandler).Methods("GET")
-	protected.HandleFunc("/api/users/all", getAllUsersHandler).Methods("GET")
-	protected.HandleFunc("/api/friends", getFriendsHandler).Methods("GET")
-	protected.HandleFunc("/api/friends/add", addFriendHandler).Methods("POST")
-	protected.HandleFunc("/api/friends/remove", removeFriendHandler).Methods("DELETE")
-	protected.HandleFunc("/api/shared-lists", getSharedListsHandler).Methods("GET")
-	protected.HandleFunc("/api/share-list", shareListHandler).Methods("POST")
+	r.HandleFunc("/api/user", authMiddleware(http.HandlerFunc(getCurrentUserHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/api/users/search", authMiddleware(http.HandlerFunc(searchUsersHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/api/users/all", authMiddleware(http.HandlerFunc(getAllUsersHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/api/friends", authMiddleware(http.HandlerFunc(getFriendsHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/api/friends/add", authMiddleware(http.HandlerFunc(addFriendHandler)).ServeHTTP).Methods("POST")
+	r.HandleFunc("/api/friends/remove", authMiddleware(http.HandlerFunc(removeFriendHandler)).ServeHTTP).Methods("DELETE")
+	r.HandleFunc("/api/shared-lists", authMiddleware(http.HandlerFunc(getSharedListsHandler)).ServeHTTP).Methods("GET")
+	r.HandleFunc("/api/share-list", authMiddleware(http.HandlerFunc(shareListHandler)).ServeHTTP).Methods("POST")
 
 	fmt.Println("Server is running on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", r))
@@ -204,12 +203,6 @@ func main() {
 // Middleware для проверки авторизации через Yandex OAuth
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Пропускаем публичные маршруты
-		if r.URL.Path == "/" || r.URL.Path == "/auth/yandex" || r.URL.Path == "/auth/yandex/callback" || r.URL.Path == "/logout" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		
 		session, _ := store.Get(r, "session")
 
 		// Проверяем, авторизован ли пользователь

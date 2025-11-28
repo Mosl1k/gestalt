@@ -253,9 +253,35 @@
 
         // Авторизация теперь через сессии, не нужен Basic Auth
         document.addEventListener('DOMContentLoaded', function() {
-            loadCurrentState();
             setupDragAndDrop();
+            // Проверяем авторизацию перед загрузкой состояния
+            checkAuthAndLoadState();
         });
+        
+        function checkAuthAndLoadState() {
+            // Проверяем авторизацию через запрос к /api/user
+            fetch('/api/user', {
+                credentials: 'include'
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Пользователь авторизован, загружаем состояние
+                    loadCurrentState();
+                } else if (response.status === 401 || response.status === 302) {
+                    // Пользователь не авторизован, не загружаем состояние
+                    // Показываем приветственную страницу (она уже загружена)
+                    console.log('Пользователь не авторизован');
+                } else {
+                    // Другая ошибка, все равно пытаемся загрузить
+                    loadCurrentState();
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка проверки авторизации:', error);
+                // При ошибке все равно пытаемся загрузить
+                loadCurrentState();
+            });
+        }
 
         function setupDragAndDrop() {
             const shoppingList = document.getElementById('shoppingList');
