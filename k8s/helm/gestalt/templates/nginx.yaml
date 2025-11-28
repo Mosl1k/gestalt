@@ -115,9 +115,16 @@ spec:
         - /bin/sh
         - -c
         - |
+          # Ждем пока init-контейнеры завершатся и создадут конфигурацию
+          while [ ! -f /shared/nginx.conf ]; do
+            echo "Ожидаю создания nginx.conf..."
+            sleep 1
+          done
+          
           # Копируем сгенерированную конфигурацию из shared volume
           cp /shared/nginx.conf /etc/nginx/nginx.conf
           echo "Конфигурация nginx скопирована"
+          cat /etc/nginx/nginx.conf | head -30
           nginx -t
           exec nginx -g 'daemon off;'
         ports:
