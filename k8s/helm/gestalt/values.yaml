@@ -35,7 +35,7 @@ redis:
 geshtalt:
   enabled: true
   image:
-    repository: ghcr.io/Mosl1k/gestalt
+    repository: docker-geshtalt
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
@@ -54,7 +54,7 @@ geshtalt:
 alice:
   enabled: true
   image:
-    repository: ghcr.io/Mosl1k/gestalt-alice
+    repository: docker-alice
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
@@ -73,7 +73,7 @@ alice:
 telegramBot:
   enabled: true
   image:
-    repository: ghcr.io/Mosl1k/gestalt-telegram-bot
+    repository: docker-telegram-bot
     tag: "latest"
     pullPolicy: IfNotPresent
   resources:
@@ -89,7 +89,7 @@ telegramBot:
 nginx:
   enabled: true
   image:
-    repository: ghcr.io/Mosl1k/gestalt-nginx
+    repository: docker-nginx
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
