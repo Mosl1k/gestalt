@@ -11,7 +11,7 @@ data:
   YANDEX_CALLBACK_URL: "https://$(DOMAIN)/auth/yandex/callback"
   DOMAIN: ""  # Будет заполнено init-контейнером или Job
   {{- else }}
-  YANDEX_CALLBACK_URL: {{ printf "https://%s/auth/yandex/callback" .Values.domain.name | quote }}
+  YANDEX_CALLBACK_URL: {{ printf "https://%s/auth/yandex/callback" (.Values.domain.name | default "localhost") | quote }}
   DOMAIN: {{ .Values.domain.name | quote }}
   {{- end }}
   REDIS_HOST: redis
