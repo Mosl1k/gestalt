@@ -135,9 +135,6 @@ spec:
           containerPort: 443
           protocol: TCP
         volumeMounts:
-        - name: nginx-config-generated
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
         - name: shared
           mountPath: /shared
         - name: letsencrypt
