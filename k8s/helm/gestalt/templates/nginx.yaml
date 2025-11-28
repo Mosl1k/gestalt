@@ -90,12 +90,11 @@ spec:
           # Заменяем DOMAIN в шаблоне
           sed "s/\${DOMAIN}/$DOMAIN/g" /etc/nginx/nginx.conf.template > /tmp/nginx.conf.tmp
           
-          # Если нет сертификата, отключаем HTTPS
-          if [ "$NO_CERT" = "1" ]; then
-            echo "Отключаем HTTPS (нет сертификата)"
-            sed -i '/listen 443/d; /ssl_certificate/d; /ssl_certificate_key/d' /tmp/nginx.conf.tmp
-            sed -i 's/return 301 https/return 200/g' /tmp/nginx.conf.tmp
-          fi
+          # В Kubernetes Traefik обрабатывает SSL, поэтому удаляем HTTPS блок из nginx
+          sed -i '/listen 443/,/^        }$/d' /tmp/nginx.conf.tmp
+          sed -i '/ssl_certificate/d; /ssl_certificate_key/d; /ssl_protocols/d; /ssl_prefer_server_ciphers/d; /ssl_session_cache/d; /ssl_session_timeout/d' /tmp/nginx.conf.tmp
+          # Убираем редирект на HTTPS, так как Traefik уже обрабатывает SSL
+          sed -i '/return 301 https/d' /tmp/nginx.conf.tmp
           
           # Копируем в shared volume для передачи в основной контейнер
           cp /tmp/nginx.conf.tmp /shared/nginx.conf
@@ -215,11 +214,8 @@ data:
                 root /var/www/html;
             }
 
-            # Если запрос уже через HTTPS (X-Forwarded-Proto), не редиректим
-            # Иначе редиректим на HTTPS
-            if ($http_x_forwarded_proto != 'https') {
-                return 301 https://$host$request_uri;
-            }
+            # Traefik обрабатывает SSL, поэтому не редиректим на HTTPS
+            # Все запросы приходят через Traefik по HTTP (порт 80)
 
             # Для certbot
             location /.well-known/acme-challenge/ {
@@ -261,74 +257,18 @@ data:
                 
                 # Заголовки безопасности (ослаблены для работы Yandex OAuth)
                 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                # Минимальный CSP для работы OAuth - разрешаем почти все от Yandex
+                # Минимальный CSP для работы OAuth - разрешаем почти все HTTPS ресурсы
                 add_header Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:; frame-ancestors 'self' https:;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                # Разрешаем iframe для OAuth
-                add_header X-Frame-Options "ALLOWALL" always;
+                # Не устанавливаем X-Frame-Options для разрешения iframe OAuth
+                # add_header X-Frame-Options "SAMEORIGIN" always;
                 add_header X-XSS-Protection "1; mode=block" always;
                 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
             }
         }
 
-        # HTTPS сервер
-        server {
-            listen 443 ssl http2;
-            server_name ${DOMAIN};
-
-            # SSL сертификаты
-            ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-            ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
-
-            # SSL настройки
-            ssl_protocols TLSv1.2 TLSv1.3;
-            ssl_prefer_server_ciphers off;
-            ssl_session_cache shared:SSL:10m;
-            ssl_session_timeout 10m;
-
-            # Для верификации Yandex
-            location /yandex_2643153d86de9bb9.html {
-                root /var/www/html;
-            }
-
-            # Проксирование на alice (Python Flask)
-            location /alice/ {
-                proxy_pass http://{{ include "gestalt.fullname" . }}-alice:2112/;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_redirect off;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_cache_bypass $http_upgrade;
-            }
-
-            # Проксирование на основное приложение (Go)
-            location / {
-                proxy_pass http://{{ include "gestalt.fullname" . }}-geshtalt:8080;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-                proxy_redirect off;
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection 'upgrade';
-                proxy_cache_bypass $http_upgrade;
-                
-                # Заголовки безопасности (ослаблены для работы Yandex OAuth)
-                add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                # Минимальный CSP для работы OAuth - разрешаем почти все от Yandex
-                add_header Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:; frame-ancestors 'self' https:;" always;
-                add_header X-Content-Type-Options "nosniff" always;
-                # Разрешаем iframe для OAuth
-                add_header X-Frame-Options "ALLOWALL" always;
-                add_header X-XSS-Protection "1; mode=block" always;
-                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-            }
-        }
+        # В Kubernetes Traefik обрабатывает SSL, nginx работает только на HTTP (порт 80)
+        # HTTPS блок удален, так как Traefik проксирует на nginx по HTTP
     }
 {{- end }}
 
