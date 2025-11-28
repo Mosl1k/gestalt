@@ -258,6 +258,14 @@ data:
                 proxy_cache_bypass $http_upgrade;
                 # Важно для работы cookies
                 proxy_cookie_path / "/; Secure; SameSite=Lax";
+                
+                # Заголовки безопасности
+                add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self';" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "SAMEORIGIN" always;
+                add_header X-XSS-Protection "1; mode=block" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
             }
         }
 
@@ -307,6 +315,14 @@ data:
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection 'upgrade';
                 proxy_cache_bypass $http_upgrade;
+                
+                # Заголовки безопасности
+                add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self';" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header X-Frame-Options "SAMEORIGIN" always;
+                add_header X-XSS-Protection "1; mode=block" always;
+                add_header Referrer-Policy "strict-origin-when-cross-origin" always;
             }
         }
     }
