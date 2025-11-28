@@ -328,7 +328,17 @@
                 }),
             })
             .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 302) {
+                        window.location.href = '/auth/yandex';
+                        return;
+                    }
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return; // Если был редирект
                 itemNameInput.value = '';
                 closeAddModal();
                 filterCategory(currentFilter);
@@ -374,10 +384,28 @@
                 credentials: 'include'
             })
             .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 302) {
+                        // Перенаправление на авторизацию
+                        window.location.href = '/auth/yandex';
+                        return;
+                    }
+                    throw new Error('Network response was not ok');
+                }
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Если получили HTML вместо JSON, значит нужна авторизация
+                    window.location.href = '/auth/yandex';
+                    return;
+                }
                 return response.json();
             })
             .then(data => {
+                if (!data) return; // Если был редирект, data будет undefined
+                if (!Array.isArray(data)) {
+                    console.error('Expected array, got:', data);
+                    data = [];
+                }
                 currentFilter = category;
                 filterIndex = filters.indexOf(category);
                 currentItems = data;
@@ -395,7 +423,18 @@
 
         function renderList(data) {
             const shoppingList = document.getElementById('shoppingList');
+            if (!shoppingList) {
+                console.error('shoppingList element not found');
+                return;
+            }
             shoppingList.innerHTML = '';
+            
+            // Проверяем, что data - это массив
+            if (!data || !Array.isArray(data)) {
+                console.error('renderList: data is not an array', data);
+                return;
+            }
+            
             data.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.draggable = true;
