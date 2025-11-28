@@ -261,7 +261,7 @@ data:
                 
                 # Заголовки безопасности
                 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' yastatic.net yandex.st mc.yandex.ru mc.yandex.com oauth.yandex.ru; style-src 'self' 'unsafe-inline' yastatic.net oauth.yandex.ru; img-src 'self' data: yastatic.net oauth.yandex.ru; font-src 'self' data: yastatic.net oauth.yandex.ru; connect-src 'self' passport.yandex.ru mc.yandex.ru mc.yandex.com yandex.ru autofill.yandex.ru oauth.yandex.ru; frame-src 'self' oauth.yandex.ru passport.yandex.ru; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.yandex.ru *.yandex.com *.yastatic.net; style-src 'self' 'unsafe-inline' *.yandex.ru *.yandex.com *.yastatic.net; img-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; font-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; connect-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; frame-src 'self' *.yandex.ru *.yandex.com; frame-ancestors 'self' *.yandex.ru *.yandex.com;" always;
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header X-Frame-Options "SAMEORIGIN" always;
                 add_header X-XSS-Protection "1; mode=block" always;
@@ -318,7 +318,7 @@ data:
                 
                 # Заголовки безопасности
                 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' yastatic.net yandex.st mc.yandex.ru mc.yandex.com oauth.yandex.ru; style-src 'self' 'unsafe-inline' yastatic.net oauth.yandex.ru; img-src 'self' data: yastatic.net oauth.yandex.ru; font-src 'self' data: yastatic.net oauth.yandex.ru; connect-src 'self' passport.yandex.ru mc.yandex.ru mc.yandex.com yandex.ru autofill.yandex.ru oauth.yandex.ru; frame-src 'self' oauth.yandex.ru passport.yandex.ru; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.yandex.ru *.yandex.com *.yastatic.net; style-src 'self' 'unsafe-inline' *.yandex.ru *.yandex.com *.yastatic.net; img-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; font-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; connect-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; frame-src 'self' *.yandex.ru *.yandex.com; frame-ancestors 'self' *.yandex.ru *.yandex.com;" always;
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header X-Frame-Options "SAMEORIGIN" always;
                 add_header X-XSS-Protection "1; mode=block" always;
