@@ -1323,29 +1323,47 @@ func internalListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := "shoppingList:" + userID + ":" + category
-	val, err := client.Get(ctx, key).Result()
-	if err == redis.Nil || val == "" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]Item{})
-		return
-	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	// Для внутреннего API объединяем данные всех пользователей из SERVICE_USER_IDS
+	// Если SERVICE_USER_IDS не указан, используем только SERVICE_USER_ID
+	serviceUserIDs := os.Getenv("SERVICE_USER_IDS") // Формат: "77415476,1179386959"
+	var allUserIDs []string
+	
+	if serviceUserIDs != "" {
+		// Разбиваем строку по запятой и убираем пробелы
+		for _, id := range strings.Split(serviceUserIDs, ",") {
+			trimmedID := strings.TrimSpace(id)
+			if trimmedID != "" {
+				allUserIDs = append(allUserIDs, trimmedID)
+			}
+		}
+	}
+	
+	// Если SERVICE_USER_IDS не указан, используем только SERVICE_USER_ID
+	if len(allUserIDs) == 0 {
+		allUserIDs = []string{userID}
 	}
 
-	var items []Item
-	err = json.Unmarshal([]byte(val), &items)
-	if err != nil {
-		log.Printf("Ошибка парсинга JSON для %s: %v, значение: %s", key, err, val)
-		// Возвращаем пустой список вместо ошибки
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]Item{})
-		return
+	// Объединяем данные из всех указанных пользователей
+	var allItems []Item
+	for _, uid := range allUserIDs {
+		key := "shoppingList:" + uid + ":" + category
+		val, err := client.Get(ctx, key).Result()
+		if err == nil && val != "" {
+			var items []Item
+			if err := json.Unmarshal([]byte(val), &items); err == nil {
+				// Добавляем префикс с user_id, если пользователей несколько
+				if len(allUserIDs) > 1 {
+					for i := range items {
+						items[i].Name = "[" + uid + "] " + items[i].Name
+					}
+				}
+				allItems = append(allItems, items...)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(allItems)
 }
 
 func internalAddHandler(w http.ResponseWriter, r *http.Request) {

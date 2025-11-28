@@ -55,7 +55,7 @@ def get_main_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_list_keyboard(current_category):
-    """Возвращает клавиатуру для списка с кнопками Назад, Предыдущий, Следующий, Добавить и Что приготовить."""
+    """Возвращает клавиатуру для списка с кнопками Назад, Предыдущий, Следующий и Добавить."""
     current_index = CATEGORIES.index(current_category)
     prev_category = CATEGORIES[(current_index - 1) % len(CATEGORIES)]
     next_category = CATEGORIES[(current_index + 1) % len(CATEGORIES)]
@@ -66,8 +66,7 @@ def get_list_keyboard(current_category):
             InlineKeyboardButton("⬅️ Предыдущий", callback_data=f"list:{prev_category}"),
             InlineKeyboardButton("Следующий ➡️", callback_data=f"list:{next_category}")
         ],
-        [InlineKeyboardButton("➕ Добавить", callback_data=f"add:{current_category}")],
-        [InlineKeyboardButton("Что приготовить 🍳", callback_data="suggest_dishes")]
+        [InlineKeyboardButton("➕ Добавить", callback_data=f"add:{current_category}")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
