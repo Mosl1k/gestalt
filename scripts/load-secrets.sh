@@ -125,6 +125,17 @@ if [ "$USE_EXISTING" != true ]; then
     > "$ENV_FILE"
 fi
 
+# Если .env существует, используем его как основу
+if [ -f "$ENV_FILE" ]; then
+    EXISTING_ENV_FILE="$ENV_FILE"
+    # Создаем временную копию для чтения
+    cp "$ENV_FILE" "${ENV_FILE}.tmp"
+    EXISTING_ENV_FILE="${ENV_FILE}.tmp"
+else
+    EXISTING_ENV_FILE=""
+    > "$ENV_FILE"
+fi
+
 # Загружаем обязательные секреты
 MISSING_SECRETS=()
 for secret in "${REQUIRED_SECRETS[@]}"; do
@@ -148,30 +159,23 @@ for secret in "${REQUIRED_SECRETS[@]}"; do
     
     # Если все еще нет значения
     if [ -z "$value" ]; then
-        # Если используем существующий .env и переменная там есть, берем оттуда
-        if [ "$USE_EXISTING" = true ] && grep -q "^${secret}=" "$EXISTING_ENV_FILE"; then
-            value=$(get_env_value "$secret" "$EXISTING_ENV_FILE")
-            if [ -n "$value" ]; then
-                debug "Секрет $secret сохранен из существующего .env файла"
-            fi
-        fi
-        
-        if [ -z "$value" ]; then
-            warn "Секрет $secret не найден ни в GitHub Secrets, ни в .env файле"
-            MISSING_SECRETS+=("$secret")
-            continue
-        fi
+        warn "Секрет $secret не найден ни в GitHub Secrets, ни в .env файле"
+        MISSING_SECRETS+=("$secret")
+        continue
     fi
     
-    # Записываем в .env файл только если не используем существующий или значение изменилось
-    if [ "$USE_EXISTING" != true ] || ! grep -q "^${secret}=${value}$" "$ENV_FILE" 2>/dev/null; then
-        # Удаляем старую строку если есть
-        if [ "$USE_EXISTING" = true ]; then
-            sed -i "/^${secret}=/d" "$ENV_FILE"
-        fi
+    # Записываем в .env файл (обновляем если уже есть)
+    if grep -q "^${secret}=" "$ENV_FILE" 2>/dev/null; then
+        # Обновляем существующую строку
+        sed -i "s|^${secret}=.*|${secret}=${value}|" "$ENV_FILE"
+    else
+        # Добавляем новую строку
         echo "${secret}=${value}" >> "$ENV_FILE"
     fi
 done
+
+# Удаляем временный файл
+rm -f "${ENV_FILE}.tmp"
 
 # Загружаем опциональные секреты
 for secret in "${OPTIONAL_SECRETS[@]}"; do
