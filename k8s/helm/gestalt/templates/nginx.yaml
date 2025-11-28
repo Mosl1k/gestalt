@@ -259,11 +259,13 @@ data:
                 # Важно для работы cookies
                 proxy_cookie_path / "/; Secure; SameSite=Lax";
                 
-                # Заголовки безопасности
+                # Заголовки безопасности (ослаблены для работы Yandex OAuth)
                 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                add_header Content-Security-Policy "default-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.yandex.ru *.yandex.com *.yastatic.net; style-src 'self' 'unsafe-inline' *.yandex.ru *.yandex.com *.yastatic.net; img-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; font-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; connect-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; frame-src 'self' *.yandex.ru *.yandex.com; frame-ancestors 'self' *.yandex.ru *.yandex.com;" always;
+                # Минимальный CSP для работы OAuth - разрешаем почти все от Yandex
+                add_header Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:; frame-ancestors 'self' https:;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header X-Frame-Options "SAMEORIGIN" always;
+                # Разрешаем iframe для OAuth
+                add_header X-Frame-Options "ALLOWALL" always;
                 add_header X-XSS-Protection "1; mode=block" always;
                 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
             }
@@ -316,11 +318,13 @@ data:
                 proxy_set_header Connection 'upgrade';
                 proxy_cache_bypass $http_upgrade;
                 
-                # Заголовки безопасности
+                # Заголовки безопасности (ослаблены для работы Yandex OAuth)
                 add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
-                add_header Content-Security-Policy "default-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.yandex.ru *.yandex.com *.yastatic.net; style-src 'self' 'unsafe-inline' *.yandex.ru *.yandex.com *.yastatic.net; img-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; font-src 'self' data: *.yandex.ru *.yandex.com *.yastatic.net; connect-src 'self' *.yandex.ru *.yandex.com *.yastatic.net; frame-src 'self' *.yandex.ru *.yandex.com; frame-ancestors 'self' *.yandex.ru *.yandex.com;" always;
+                # Минимальный CSP для работы OAuth - разрешаем почти все от Yandex
+                add_header Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:; frame-ancestors 'self' https:;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header X-Frame-Options "SAMEORIGIN" always;
+                # Разрешаем iframe для OAuth
+                add_header X-Frame-Options "ALLOWALL" always;
                 add_header X-XSS-Protection "1; mode=block" always;
                 add_header Referrer-Policy "strict-origin-when-cross-origin" always;
             }
