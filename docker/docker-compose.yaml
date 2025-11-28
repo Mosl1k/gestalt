@@ -62,7 +62,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
-      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      # TELEGRAM_TOKEN загружается из env_file
     networks:
       - default
     restart: always
