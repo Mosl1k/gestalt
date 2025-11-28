@@ -6,12 +6,8 @@ metadata:
   labels:
     {{- include "gestalt.labels" . | nindent 4 }}
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    # Настройки TLS для совместимости с TLS 1.3 (как в nginx)
-    traefik.ingress.kubernetes.io/router.tls.options: "default"
-    # Минимальная версия TLS 1.2, поддерживаем TLS 1.3
-    traefik.ingress.kubernetes.io/router.tls.minversion: "VersionTLS12"
 spec:
   ingressClassName: traefik
   tls:
