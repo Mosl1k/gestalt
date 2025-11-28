@@ -11,6 +11,7 @@ ENV_FILE="$PROJECT_ROOT/.env"
 GITHUB_REPO="${GITHUB_REPOSITORY:-Mosl1k/gestalt}"
 
 # Цвета для вывода
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
@@ -22,6 +23,10 @@ info() {
 
 warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
 debug() {

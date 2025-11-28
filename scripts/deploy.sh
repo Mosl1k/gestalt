@@ -98,43 +98,46 @@ else
     info "Репозиторий уже существует"
 fi
 
-# Шаг 5: Получение .env файла из Яндекс.Облако
-info "Поиск .env файла в Яндекс.Облако..."
-if [ -f "$YANDEX_MOUNT/.env" ]; then
-    info "Найден .env файл в Яндекс.Облако. Копирую..."
-    cp "$YANDEX_MOUNT/.env" "$ENV_FILE"
-    info ".env файл скопирован"
-elif [ -f "$BACKUP_DIR/.env" ]; then
-    info "Найден .env файл в директории бэкапов. Копирую..."
-    cp "$BACKUP_DIR/.env" "$ENV_FILE"
-    info ".env файл скопирован"
+# Шаг 5: Загрузка секретов из GitHub Secrets или .env файла
+info "Загрузка секретов..."
+
+# Сначала пытаемся загрузить из GitHub Secrets или существующего .env
+if [ -f "$PROJECT_ROOT/scripts/load-secrets.sh" ]; then
+    if "$PROJECT_ROOT/scripts/load-secrets.sh"; then
+        info "Секреты загружены из GitHub Secrets или существующего .env"
+    else
+        warn "Не удалось загрузить секреты через load-secrets.sh"
+        # Пробуем загрузить из Яндекс.Облако как fallback
+        if [ -f "$YANDEX_MOUNT/.env" ]; then
+            info "Найден .env файл в Яндекс.Облако. Копирую..."
+            cp "$YANDEX_MOUNT/.env" "$ENV_FILE"
+            info ".env файл скопирован"
+        elif [ -f "$BACKUP_DIR/.env" ]; then
+            info "Найден .env файл в директории бэкапов. Копирую..."
+            cp "$BACKUP_DIR/.env" "$ENV_FILE"
+            info ".env файл скопирован"
+        else
+            error ".env файл не найден ни в GitHub Secrets, ни в Яндекс.Облако"
+            error "Пожалуйста, настройте GitHub Secrets или создайте .env файл"
+            exit 1
+        fi
+    fi
 else
-    warn ".env файл не найден в Яндекс.Облако"
-    warn "Создаю шаблон .env файла..."
-    cat > "$ENV_FILE" << 'EOF'
-# Redis
-REDIS_ADDR=redis:6379
-REDIS_PASSWORD=your_redis_password_here
-
-# Yandex OAuth
-YANDEX_CLIENT_ID=your_client_id_here
-YANDEX_CLIENT_SECRET=your_client_secret_here
-YANDEX_CALLBACK_URL=https://kpalch.ru/auth/yandex/callback
-
-# Session
-SESSION_SECRET=your_session_secret_here_min_32_chars
-
-# Telegram Bot
-TELEGRAM_TOKEN=your_telegram_token_here
-API_URL=http://geshtalt:8080/internal/api
-SERVICE_USER_ID=your_service_user_id_here
-
-# Service credentials (deprecated, но может использоваться)
-USERNAME=your_username_here
-PASSWORD=your_password_here
-EOF
-    error "Пожалуйста, отредактируйте $ENV_FILE и заполните все необходимые переменные"
-    exit 1
+    # Если скрипт load-secrets.sh не найден, используем старый способ
+    warn "Скрипт load-secrets.sh не найден, используем старый способ загрузки .env"
+    if [ -f "$YANDEX_MOUNT/.env" ]; then
+        info "Найден .env файл в Яндекс.Облако. Копирую..."
+        cp "$YANDEX_MOUNT/.env" "$ENV_FILE"
+        info ".env файл скопирован"
+    elif [ -f "$BACKUP_DIR/.env" ]; then
+        info "Найден .env файл в директории бэкапов. Копирую..."
+        cp "$BACKUP_DIR/.env" "$ENV_FILE"
+        info ".env файл скопирован"
+    else
+        error ".env файл не найден"
+        error "Пожалуйста, создайте .env файл или настройте GitHub Secrets"
+        exit 1
+    fi
 fi
 
 # Шаг 6: Получение последнего бэкапа Redis
