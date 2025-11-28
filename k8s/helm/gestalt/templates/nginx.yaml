@@ -31,33 +31,49 @@ spec:
         - |
           apk add --no-cache curl bind-tools certbot
           
-          # Определяем домен
-          SERVER_IP=$(curl -s https://api.ipify.org || curl -s https://ifconfig.me)
-          if [ -z "$SERVER_IP" ]; then
-            echo "Ошибка: не удалось определить IP"
-            exit 1
+          # Проверяем домен из переменной окружения (из GitHub Secret)
+          if [ -n "$DOMAIN" ]; then
+            echo "Используем домен из переменной окружения: $DOMAIN"
+            echo "$DOMAIN" > /shared/domain.txt
+          else
+            # Определяем домен автоматически
+            SERVER_IP=$(curl -s https://api.ipify.org || curl -s https://ifconfig.me)
+            if [ -z "$SERVER_IP" ]; then
+              echo "Ошибка: не удалось определить IP"
+              exit 1
+            fi
+            
+            DOMAIN=$(dig +short -x "$SERVER_IP" 2>/dev/null | sed 's/\.$//' | head -1 || echo "")
+            if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "NXDOMAIN" ] || echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
+              echo "Предупреждение: не удалось определить домен, используем IP: $SERVER_IP"
+              DOMAIN="$SERVER_IP"
+            fi
+            
+            echo "Определен домен автоматически: $DOMAIN"
+            echo "$DOMAIN" > /shared/domain.txt
           fi
           
-          DOMAIN=$(dig +short -x "$SERVER_IP" 2>/dev/null | sed 's/\.$//' || echo "")
-          if [ -z "$DOMAIN" ] || [ "$DOMAIN" = "NXDOMAIN" ]; then
-            echo "Предупреждение: не удалось определить домен, используем IP: $SERVER_IP"
-            DOMAIN="$SERVER_IP"
-          fi
-          
-          echo "Определен домен: $DOMAIN"
-          echo "$DOMAIN" > /shared/domain.txt
-          
-          # Если домен - IP, пропускаем certbot
-          if echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'; then
-            echo "Домен является IP, пропускаем certbot"
+          # Если домен - IP или имя хоста (без точки), пропускаем certbot
+          if echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || ! echo "$DOMAIN" | grep -q '\.'; then
+            echo "Домен является IP или именем хоста, пропускаем certbot"
+            echo "NO_CERT=1" > /shared/certbot-status.txt
             exit 0
           fi
           
-          # Получаем сертификат
+          # Получаем сертификат только для валидных доменов
           CERTBOT_EMAIL="{{ .Values.domain.certbotEmail | default "admin@example.com" }}"
+          mkdir -p /etc/letsencrypt/live/${DOMAIN} 2>/dev/null || true
           if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
-            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$CERTBOT_EMAIL" || true
+            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$CERTBOT_EMAIL" --config-dir /etc/letsencrypt --work-dir /tmp/certbot-work --logs-dir /tmp/certbot-logs || true
           fi
+          echo "NO_CERT=0" > /shared/certbot-status.txt
+        env:
+        - name: DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "gestalt.fullname" . }}-secrets
+              key: DOMAIN
+              optional: true
         volumeMounts:
         - name: shared
           mountPath: /shared
@@ -71,8 +87,20 @@ spec:
         - |
           apk add --no-cache gettext
           DOMAIN=$(cat /shared/domain.txt)
-          envsubst '$$DOMAIN' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
-          echo "Сгенерирован nginx.conf для домена: $DOMAIN"
+          NO_CERT=$(cat /shared/certbot-status.txt 2>/dev/null | grep -o 'NO_CERT=[01]' | cut -d= -f2 || echo "0")
+          
+          # Заменяем DOMAIN в шаблоне
+          sed "s/\${DOMAIN}/$DOMAIN/g" /etc/nginx/nginx.conf.template > /tmp/nginx.conf.tmp
+          
+          # Если нет сертификата, отключаем HTTPS
+          if [ "$NO_CERT" = "1" ]; then
+            echo "Отключаем HTTPS (нет сертификата)"
+            sed -i '/listen 443/d; /ssl_certificate/d; /ssl_certificate_key/d' /tmp/nginx.conf.tmp
+            sed -i 's/return 301 https/return 200/g' /tmp/nginx.conf.tmp
+          fi
+          
+          mv /tmp/nginx.conf.tmp /etc/nginx/nginx.conf
+          echo "Сгенерирован nginx.conf для домена: $DOMAIN (NO_CERT=$NO_CERT)"
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/nginx.conf.template
@@ -99,7 +127,6 @@ spec:
           subPath: nginx.conf
         - name: letsencrypt
           mountPath: /etc/letsencrypt
-          readOnly: true
         resources:
           {{- toYaml .Values.nginx.resources | nindent 10 }}
         livenessProbe:

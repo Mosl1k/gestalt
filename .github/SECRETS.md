@@ -18,6 +18,7 @@
 | `YANDEX_CLIENT_SECRET` | Client Secret для Yandex OAuth | `secret_key_from_yandex` |
 | `TELEGRAM_TOKEN` | Токен Telegram бота | `123456789:ABCdefGHIjklMNOpqrsTUVwxyz` |
 | `SERVICE_USER_ID` | User ID для внутренних сервисов | `service` или ваш user ID |
+| `DOMAIN` | Доменное имя сервера (опционально, если не указано - будет определено автоматически) | `example.com` |
 
 ## Использование с External Secrets Operator
 
@@ -38,7 +39,9 @@ helm install gestalt ./k8s/helm/gestalt \
   --set secrets.yandexClientId="${{ secrets.YANDEX_CLIENT_ID }}" \
   --set secrets.yandexClientSecret="${{ secrets.YANDEX_CLIENT_SECRET }}" \
   --set secrets.telegramToken="${{ secrets.TELEGRAM_TOKEN }}" \
-  --set secrets.serviceUserId="${{ secrets.SERVICE_USER_ID }}"
+  --set secrets.serviceUserId="${{ secrets.SERVICE_USER_ID }}" \
+  --set secrets.domain="${{ secrets.DOMAIN }}" \
+  --set domain.name="${{ secrets.DOMAIN }}"
 ```
 
 ## Безопасность
