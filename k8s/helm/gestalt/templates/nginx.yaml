@@ -53,20 +53,17 @@ spec:
             echo "$DOMAIN" > /shared/domain.txt
           fi
           
-          # Если домен - IP или имя хоста (без точки), пропускаем certbot
-          if echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || ! echo "$DOMAIN" | grep -q '\.'; then
+          # Проверяем наличие сертификата на хосте (монтируется из /etc/letsencrypt)
+          if [ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
+            echo "Найден существующий сертификат для $DOMAIN"
+            echo "NO_CERT=0" > /shared/certbot-status.txt
+          elif echo "$DOMAIN" | grep -qE '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' || ! echo "$DOMAIN" | grep -q '\.'; then
             echo "Домен является IP или именем хоста, пропускаем certbot"
             echo "NO_CERT=1" > /shared/certbot-status.txt
-            exit 0
+          else
+            echo "Сертификат не найден, но домен валидный - будет работать без SSL"
+            echo "NO_CERT=1" > /shared/certbot-status.txt
           fi
-          
-          # Получаем сертификат только для валидных доменов
-          CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@${DOMAIN}}"
-          mkdir -p /etc/letsencrypt/live/${DOMAIN} 2>/dev/null || true
-          if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
-            certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$CERTBOT_EMAIL" --config-dir /etc/letsencrypt --work-dir /tmp/certbot-work --logs-dir /tmp/certbot-logs || true
-          fi
-          echo "NO_CERT=0" > /shared/certbot-status.txt
         env:
         - name: DOMAIN
           valueFrom:
@@ -150,7 +147,9 @@ spec:
       - name: nginx-config-generated
         emptyDir: {}
       - name: letsencrypt
-        emptyDir: {}
+        hostPath:
+          path: /etc/letsencrypt
+          type: Directory
       {{- if .Values.domain.autoDetect }}
       - name: shared
         emptyDir: {}
