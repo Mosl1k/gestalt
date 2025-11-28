@@ -5,14 +5,14 @@ WORKDIR /app
 # Копируем go.mod и go.sum первыми для кэширования зависимостей
 COPY backend/go.mod backend/go.sum ./
 
-# Копируем main.go чтобы go mod tidy мог проанализировать импорты
+# Загружаем зависимости (кэшируется если go.mod/go.sum не изменились)
+RUN go mod download
+
+# Копируем main.go
 COPY backend/main.go ./
 
-# Обновляем зависимости и загружаем все необходимые модули
-RUN go mod download && go mod tidy
-
-# Компилируем приложение
-RUN go build -o gestalt ./main.go
+# Компилируем приложение (используем кэш зависимостей из предыдущего шага)
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o gestalt ./main.go
 
 # Финальный образ
 FROM alpine:latest
