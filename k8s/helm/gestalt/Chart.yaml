@@ -4,6 +4,7 @@ description: Gestalt shopping list application
 type: application
 version: 1.0.0
 appVersion: "1.0.0"
+icon: https://raw.githubusercontent.com/Mosl1k/gestalt/main/k8s/helm/gestalt/icon.svg
 keywords:
   - shopping-list
   - telegram-bot

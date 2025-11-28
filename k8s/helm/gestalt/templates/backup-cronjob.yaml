@@ -72,19 +72,7 @@ spec:
                   
                   # Парсим JSON через Python (если доступен в образе)
                   if command -v python3 >/dev/null 2>&1; then
-                    echo "$list_data" | python3 -c "
-import json
-import sys
-try:
-    data = json.load(sys.stdin)
-    if isinstance(data, list):
-        for item in data:
-            status = '✓' if item.get('bought', False) else '☐'
-            priority = '🔥' if item.get('priority', 2) == 3 else ('🟡' if item.get('priority', 2) == 2 else '🟢')
-            print(f\"  {status} {priority} {item.get('name', '')}\")
-except:
-    print(f\"  {sys.stdin.read()}\")
-" 2>/dev/null || echo "  $list_data"
+                    echo "$list_data" | python3 -c 'import json, sys; data = json.load(sys.stdin); [print(f"  {\"✓\" if item.get(\"bought\") else \"☐\"} {\"🔥\" if item.get(\"priority\", 2) == 3 else (\"🟡\" if item.get(\"priority\", 2) == 2 else \"🟢\")} {item.get(\"name\", \"\")}") for item in data] if isinstance(data, list) else print(f"  {data}")' 2>/dev/null || echo "  $list_data"
                   else
                     echo "  $list_data"
                   fi
