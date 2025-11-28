@@ -6,23 +6,10 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-      - ../infra/redis/redis.conf:/usr/local/etc/redis/redis.conf.template
-    environment:
-      - REDIS_ADDR=redis:6379
-    env_file: ../.env
+      - ../infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - default
-    command:
-      - sh
-      - -c
-      - |
-        REDIS_PASS=$$(echo "$${REDIS_PASSWORD}" | sed 's/^"//;s/"$$//' | sed "s/'//g")
-        if [ -z "$$REDIS_PASS" ]; then
-          echo "ERROR: REDIS_PASSWORD is empty"
-          exit 1
-        fi
-        sed "s|{{REDIS_PASSWORD}}|$$REDIS_PASS|g" /usr/local/etc/redis/redis.conf.template > /usr/local/etc/redis/redis.conf
-        redis-server /usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
     restart: always
 
   geshtalt:
