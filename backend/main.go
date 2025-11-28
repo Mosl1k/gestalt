@@ -516,7 +516,11 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 
 func addHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
-	userID := session.Values["user_id"].(string)
+	userID, ok := session.Values["user_id"].(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	
 	var newItem Item
 	err := json.NewDecoder(r.Body).Decode(&newItem)
