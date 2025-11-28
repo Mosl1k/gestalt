@@ -36,7 +36,7 @@ func init() {
 	// Загружаем переменные окружения из .env файла (только для локальной разработки)
 	// В production переменные должны быть установлены через Kubernetes Secrets/ConfigMaps
 	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
-		godotenv.Load()
+	godotenv.Load()
 	}
 
 	// Получаем секретный ключ из переменных окружения
@@ -522,17 +522,27 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Логируем полученную категорию для отладки
+	log.Printf("Получена категория: '%s' (длина: %d, байты: %v)", category, len(category), []byte(category))
+
 	// Для категории "купить" проверяем общие списки
-	if category == "купить" {
+	// Используем нормализацию для сравнения (убираем лишние пробелы)
+	categoryNormalized := strings.TrimSpace(category)
+	if categoryNormalized == "купить" {
 		// Загружаем личный список
 		personalKey := "shoppingList:" + userID + ":" + category
 		personalVal, err := client.Get(ctx, personalKey).Result()
 		var personalItems []Item
 		if err == nil && personalVal != "" {
+			log.Printf("Найдены данные в Redis для %s: длина %d", personalKey, len(personalVal))
 			if err := json.Unmarshal([]byte(personalVal), &personalItems); err != nil {
 				log.Printf("Ошибка парсинга JSON для %s: %v", personalKey, err)
 				personalItems = []Item{} // Используем пустой список при ошибке
+			} else {
+				log.Printf("Успешно распарсено %d элементов", len(personalItems))
 			}
+		} else {
+			log.Printf("Данные не найдены в Redis для %s (err: %v)", personalKey, err)
 		}
 		
 		// Проверяем, есть ли общие списки
@@ -567,6 +577,8 @@ func listHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		
+		log.Printf("Возвращаем %d элементов для категории 'купить'", len(personalItems))
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(personalItems)
 		return
 	}
@@ -617,6 +629,10 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Нормализуем категорию (убираем пробелы)
+	newItem.Category = strings.TrimSpace(newItem.Category)
+	log.Printf("Добавление элемента в категорию: '%s' (длина: %d, байты: %v)", newItem.Category, len(newItem.Category), []byte(newItem.Category))
+
 	if newItem.Priority == 0 {
 		newItem.Priority = 2
 	}
@@ -634,6 +650,7 @@ func addHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Всегда сохраняем в личный список пользователя
 	key := "shoppingList:" + userID + ":" + newItem.Category
+	log.Printf("Ключ Redis: %s", key)
 	val, err := client.Get(ctx, key).Result()
 	if err != nil && err != redis.Nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1233,9 +1250,9 @@ func shareListHandler(w http.ResponseWriter, r *http.Request) {
 		// Проверяем, что это валидный JSON
 		var items []Item
 		if err := json.Unmarshal([]byte(personalVal), &items); err == nil {
-			// Сохраняем копию списка для друга
-			sharedKey := "shoppingList:" + userID + ":" + req.Category
-			client.Set(ctx, sharedKey, personalVal, 0)
+		// Сохраняем копию списка для друга
+		sharedKey := "shoppingList:" + userID + ":" + req.Category
+		client.Set(ctx, sharedKey, personalVal, 0)
 		} else {
 			log.Printf("Ошибка парсинга JSON для %s: %v", personalKey, err)
 		}
