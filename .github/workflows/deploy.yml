@@ -115,4 +115,6 @@ jobs:
     #       --set secrets.yandexClientId="${{ secrets.YANDEX_CLIENT_ID }}" \
     #       --set secrets.yandexClientSecret="${{ secrets.YANDEX_CLIENT_SECRET }}" \
     #       --set secrets.telegramToken="${{ secrets.TELEGRAM_TOKEN }}" \
-    #       --set secrets.serviceUserId="${{ secrets.SERVICE_USER_ID }}"
+    #       --set secrets.serviceUserId="${{ secrets.SERVICE_USER_ID }}" \
+    #       --set secrets.domain="${{ secrets.DOMAIN }}" \
+    #       --set domain.name="${{ secrets.DOMAIN }}"
