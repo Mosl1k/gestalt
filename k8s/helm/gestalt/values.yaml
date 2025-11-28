@@ -85,21 +85,20 @@ telegramBot:
       cpu: "200m"
   replicas: 1
 
-# Ingress configuration (Traefik обрабатывает SSL и маршрутизацию)
-ingress:
-  enabled: false
-  className: "nginx"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-  hosts:
-    - host: ""  # Будет заполнено из domain.name
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: gestalt-tls
-      hosts:
-        - ""  # Будет заполнено из domain.name
+# Nginx configuration
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: "alpine"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
 
 # Domain configuration
 domain:
@@ -151,9 +150,9 @@ backup:
   schedule: "*/20 * * * *"  # Каждые 20 минут
   yandexMountPath: "/mnt/yandex/gestalt"
 
-# Ingress configuration
+# Ingress configuration (отключен, используется nginx напрямую)
 ingress:
-  enabled: true
+  enabled: false
 
 # Node selector, tolerations and affinity
 nodeSelector: {}

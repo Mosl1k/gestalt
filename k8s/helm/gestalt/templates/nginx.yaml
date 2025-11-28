@@ -1,0 +1,149 @@
+{{- if .Values.nginx.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gestalt.fullname" . }}-nginx
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "gestalt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nginx
+  template:
+    metadata:
+      labels:
+        {{- include "gestalt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nginx
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: nginx
+        image: {{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}
+        imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 80
+          hostPort: 80
+          protocol: TCP
+        - name: https
+          containerPort: 443
+          hostPort: 443
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        - name: letsencrypt
+          mountPath: /etc/letsencrypt
+          readOnly: true
+        - name: html
+          mountPath: /var/www/html
+        - name: certbot-www
+          mountPath: /var/www/certbot
+        env:
+        - name: DOMAIN
+          value: {{ .Values.domain.name | default "localhost" }}
+        resources:
+          {{- toYaml .Values.nginx.resources | nindent 10 }}
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: {{ include "gestalt.fullname" . }}-nginx-config
+      - name: letsencrypt
+        hostPath:
+          path: /etc/letsencrypt
+          type: Directory
+      - name: html
+        emptyDir: {}
+      - name: certbot-www
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gestalt.fullname" . }}-nginx-config
+  labels:
+    {{- include "gestalt.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        # Редирект с HTTP на HTTPS
+        server {
+            listen 80;
+            server_name {{ .Values.domain.name | default "localhost" }};
+
+            # Для верификации Yandex
+            location /yandex_2643153d86de9bb9.html {
+                root /var/www/html;
+            }
+
+            # Редирект на HTTPS
+            location / {
+                return 301 https://$host$request_uri;
+            }
+
+            # Для certbot
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+        }
+
+        # HTTPS сервер
+        server {
+            listen 443 ssl http2;
+            server_name {{ .Values.domain.name | default "localhost" }};
+
+            # SSL сертификаты
+            ssl_certificate /etc/letsencrypt/live/{{ .Values.domain.name | default "localhost" }}/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/{{ .Values.domain.name | default "localhost" }}/privkey.pem;
+
+            # SSL настройки
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_prefer_server_ciphers off;
+            ssl_session_cache shared:SSL:10m;
+            ssl_session_timeout 10m;
+
+            # Для верификации Yandex
+            location /yandex_2643153d86de9bb9.html {
+                root /var/www/html;
+            }
+
+            # Проксирование на alice (Python Flask)
+            location /alice/ {
+                proxy_pass http://{{ include "gestalt.fullname" . }}-alice:2112/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_cache_bypass $http_upgrade;
+            }
+
+            # Проксирование на основное приложение (Go)
+            location / {
+                proxy_pass http://{{ include "gestalt.fullname" . }}-geshtalt:8080;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_redirect off;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_cache_bypass $http_upgrade;
+            }
+        }
+    }
+{{- end }}
+
