@@ -87,7 +87,7 @@ async def start(update: Update, context):
         await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
     elif update.callback_query:
         try:
-            await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
+        await update.callback_query.message.edit_text("Выберите категорию:", reply_markup=reply_markup)
         except Exception:
             # Если не удалось отредактировать, отправляем новое сообщение
             await update.callback_query.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
@@ -280,7 +280,7 @@ async def change_category_to(update: Update, context):
             return
 
         try:
-            items = response.json()
+        items = response.json()
         except json.JSONDecodeError as e:
             error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
             logging.error(error_msg)
@@ -348,7 +348,7 @@ async def change_priority_to(update: Update, context):
             return
 
         try:
-            items = response.json()
+        items = response.json()
         except json.JSONDecodeError as e:
             error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
             logging.error(error_msg)
@@ -402,7 +402,7 @@ async def suggest_dishes(update: Update, context):
             return
 
         try:
-            items = response.json()
+        items = response.json()
         except json.JSONDecodeError as e:
             error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
             logging.error(error_msg)
@@ -477,7 +477,7 @@ async def show_list(update: Update, context, list_type):
     """Показывает содержимое указанного списка."""
     if list_type not in LISTS:
         if update.callback_query:
-            await update.callback_query.message.reply_text(f"Неизвестная категория: {list_type}")
+        await update.callback_query.message.reply_text(f"Неизвестная категория: {list_type}")
         return
 
     try:
@@ -498,11 +498,11 @@ async def show_list(update: Update, context, list_type):
             error_msg = "Пустой ответ от API"
             logging.error(error_msg)
             if update.callback_query:
-                await update.callback_query.message.reply_text(error_msg)
+            await update.callback_query.message.reply_text(error_msg)
             return
 
         try:
-            items = response.json()
+        items = response.json()
         except json.JSONDecodeError as e:
             error_msg = f"Ошибка парсинга JSON: {e}. Ответ: {response.text[:200]}"
             logging.error(error_msg)
@@ -540,7 +540,7 @@ async def show_list(update: Update, context, list_type):
                 await update.callback_query.message.edit_text(response_text, reply_markup=reply_markup)
             except Exception as e:
                 # Если не удалось отредактировать (например, текст не изменился), отправляем новое сообщение
-                await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
+        await update.callback_query.message.reply_text(response_text, reply_markup=reply_markup)
     except requests.RequestException as e:
         error_msg = f"Ошибка подключения к API: {e}"
         logging.error(error_msg)
